@@ -1,0 +1,15 @@
+# downloaded / installed (install.bat brings them back)
+.venv/
+models/
+install_log.txt
+# personal data: your groups' voices, your own voice, session transcripts, settings
+groups/
+voices.json*
+my_voice.json
+transcripts/
+config.json
+app.log
+# leftovers
+snapshot_*.png
+__pycache__/
+*.tmp

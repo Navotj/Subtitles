@@ -1,0 +1,380 @@
+{
+ "names": [
+  "Dana",
+  "Omer",
+  "Yael",
+  "Itai",
+  "Noa",
+  "Gil"
+ ],
+ "sids": [
+  463,
+  886,
+  573,
+  877,
+  799,
+  476
+ ],
+ "utts": [
+  {
+   "start": 1.0,
+   "end": 4.46,
+   "speaker": "Omer",
+   "text": "I think we should go back to the village and talk to the old wizard first."
+  },
+  {
+   "start": 5.16,
+   "end": 6.983,
+   "speaker": "Dana",
+   "text": "I attack the goblin with my longsword."
+  },
+  {
+   "start": 7.383,
+   "end": 9.6,
+   "speaker": "Noa",
+   "text": "I attack the goblin with my longsword."
+  },
+  {
+   "start": 10.0,
+   "end": 11.231,
+   "speaker": "Noa",
+   "text": "I got a twelve."
+  },
+  {
+   "start": 12.231,
+   "end": 13.218,
+   "speaker": "Itai",
+   "text": "Natural twenty!"
+  },
+  {
+   "start": 13.918,
+   "end": 15.276,
+   "speaker": "Dana",
+   "text": "I want to roll for perception."
+  },
+  {
+   "start": 15.426,
+   "end": 17.411,
+   "speaker": "Dana",
+   "text": "Can I cast detect magic on the chest?"
+  },
+  {
+   "start": 18.911,
+   "end": 21.291,
+   "speaker": "Dana",
+   "text": "I'll use my bonus action to drink a healing potion."
+  },
+  {
+   "start": 21.691,
+   "end": 24.977,
+   "speaker": "Yael",
+   "text": "The door creaks open and you see a long hallway lit by torches."
+  },
+  {
+   "start": 25.677,
+   "end": 27.697,
+   "speaker": "Dana",
+   "text": "I failed. I take how much damage?"
+  },
+  {
+   "start": 27.847,
+   "end": 28.765,
+   "speaker": "Dana",
+   "text": "Eight. Not great."
+  },
+  {
+   "start": 29.015,
+   "end": 30.326,
+   "speaker": "Omer",
+   "text": "Give me a charisma check."
+  },
+  {
+   "start": 31.826,
+   "end": 34.172,
+   "speaker": "Itai",
+   "text": "I'm casting fireball at the group of cultists."
+  },
+  {
+   "start": 34.872,
+   "end": 35.673,
+   "speaker": "Dana",
+   "text": "Roll initiative."
+  },
+  {
+   "start": 36.673,
+   "end": 37.857,
+   "speaker": "Dana",
+   "text": "Does anyone have a rope?"
+  },
+  {
+   "start": 38.857,
+   "end": 39.658,
+   "speaker": "Dana",
+   "text": "That's a seventeen."
+  },
+  {
+   "start": 39.908,
+   "end": 43.264,
+   "speaker": "Dana",
+   "text": "The door creaks open and you see a long hallway lit by torches."
+  },
+  {
+   "start": 43.964,
+   "end": 45.74,
+   "speaker": "Dana",
+   "text": "I attack the goblin with my longsword."
+  },
+  {
+   "start": 47.24,
+   "end": 47.844,
+   "speaker": "Dana",
+   "text": "Okay."
+  },
+  {
+   "start": 48.544,
+   "end": 51.017,
+   "speaker": "Dana",
+   "text": "The guard laughs at you and points his spear at your chest."
+  },
+  {
+   "start": 51.267,
+   "end": 52.973,
+   "speaker": "Omer",
+   "text": "Twenty eight points of fire damage."
+  },
+  {
+   "start": 53.223,
+   "end": 55.859,
+   "speaker": "Omer",
+   "text": "I'll use my bonus action to drink a healing potion."
+  },
+  {
+   "start": 57.359,
+   "end": 59.913,
+   "speaker": "Omer",
+   "text": "I'm casting fireball at the group of cultists."
+  },
+  {
+   "start": 60.913,
+   "end": 62.887,
+   "speaker": "Dana",
+   "text": "Can I cast detect magic on the chest?"
+  },
+  {
+   "start": 63.037,
+   "end": 64.012,
+   "speaker": "Yael",
+   "text": "Sure, let's do that."
+  },
+  {
+   "start": 64.712,
+   "end": 65.745,
+   "speaker": "Dana",
+   "text": "Alright, I punch him."
+  },
+  {
+   "start": 65.995,
+   "end": 67.899,
+   "speaker": "Dana",
+   "text": "I failed. I take how much damage?"
+  },
+  {
+   "start": 68.899,
+   "end": 71.384,
+   "speaker": "Noa",
+   "text": "Wait, are we sure this isn't a trap?"
+  },
+  {
+   "start": 71.634,
+   "end": 72.482,
+   "speaker": "Dana",
+   "text": "Roll initiative."
+  },
+  {
+   "start": 72.732,
+   "end": 73.289,
+   "speaker": "Dana",
+   "text": "No way."
+  },
+  {
+   "start": 74.289,
+   "end": 76.263,
+   "speaker": "Omer",
+   "text": "I attack the goblin with my longsword."
+  },
+  {
+   "start": 76.963,
+   "end": 78.971,
+   "speaker": "Gil",
+   "text": "I failed. I take how much damage?"
+  },
+  {
+   "start": 79.121,
+   "end": 79.725,
+   "speaker": "Yael",
+   "text": "Nineteen."
+  },
+  {
+   "start": 79.875,
+   "end": 82.348,
+   "speaker": "Dana",
+   "text": "The guard laughs at you and points his spear at your chest."
+  },
+  {
+   "start": 82.748,
+   "end": 84.396,
+   "speaker": "Dana",
+   "text": "Wait, are we sure this isn't a trap?"
+  },
+  {
+   "start": 84.796,
+   "end": 86.828,
+   "speaker": "Gil",
+   "text": "I failed. I take how much damage?"
+  },
+  {
+   "start": 87.228,
+   "end": 90.073,
+   "speaker": "Gil",
+   "text": "The guard laughs at you and points his spear at your chest."
+  },
+  {
+   "start": 90.773,
+   "end": 92.143,
+   "speaker": "Dana",
+   "text": "Alright, I punch him."
+  },
+  {
+   "start": 93.143,
+   "end": 96.533,
+   "speaker": "Itai",
+   "text": "Okay, so you walk into the tavern and the barkeep looks up at you."
+  },
+  {
+   "start": 96.683,
+   "end": 100.514,
+   "speaker": "Dana",
+   "text": "The dragon breathes fire across the bridge. Everyone make a dexterity saving throw."
+  },
+  {
+   "start": 101.214,
+   "end": 102.271,
+   "speaker": "Itai",
+   "text": "Eight. Not great."
+  },
+  {
+   "start": 103.271,
+   "end": 104.606,
+   "speaker": "Dana",
+   "text": "I want to roll for perception."
+  },
+  {
+   "start": 104.756,
+   "end": 109.272,
+   "speaker": "Omer",
+   "text": "The dragon breathes fire across the bridge. Everyone make a dexterity saving throw."
+  },
+  {
+   "start": 110.272,
+   "end": 112.362,
+   "speaker": "Itai",
+   "text": "Hold on, I need to check my spell slots."
+  },
+  {
+   "start": 112.762,
+   "end": 115.572,
+   "speaker": "Gil",
+   "text": "I'll use my bonus action to drink a healing potion."
+  },
+  {
+   "start": 115.972,
+   "end": 116.959,
+   "speaker": "Itai",
+   "text": "Alright, I punch him."
+  },
+  {
+   "start": 117.359,
+   "end": 119.634,
+   "speaker": "Yael",
+   "text": "I'll use my bonus action to drink a healing potion."
+  },
+  {
+   "start": 119.884,
+   "end": 123.065,
+   "speaker": "Itai",
+   "text": "I think we should go back to the village and talk to the old wizard first."
+  },
+  {
+   "start": 123.465,
+   "end": 125.497,
+   "speaker": "Dana",
+   "text": "I failed. I take how much damage?"
+  },
+  {
+   "start": 125.647,
+   "end": 126.03,
+   "speaker": "Yael",
+   "text": "Yeah."
+  },
+  {
+   "start": 126.73,
+   "end": 127.926,
+   "speaker": "Dana",
+   "text": "Does anyone have a rope?"
+  },
+  {
+   "start": 128.626,
+   "end": 130.472,
+   "speaker": "Itai",
+   "text": "My character would never trust that merchant."
+  },
+  {
+   "start": 131.472,
+   "end": 132.424,
+   "speaker": "Dana",
+   "text": "That's a seventeen."
+  },
+  {
+   "start": 133.424,
+   "end": 134.365,
+   "speaker": "Dana",
+   "text": "Roll initiative."
+  },
+  {
+   "start": 134.765,
+   "end": 136.611,
+   "speaker": "Noa",
+   "text": "I want to roll for perception."
+  },
+  {
+   "start": 137.311,
+   "end": 138.286,
+   "speaker": "Dana",
+   "text": "Roll initiative."
+  },
+  {
+   "start": 138.536,
+   "end": 143.482,
+   "speaker": "Gil",
+   "text": "The dragon breathes fire across the bridge. Everyone make a dexterity saving throw."
+  },
+  {
+   "start": 144.982,
+   "end": 145.62,
+   "speaker": "Gil",
+   "text": "Okay."
+  },
+  {
+   "start": 147.12,
+   "end": 149.651,
+   "speaker": "Dana",
+   "text": "The guard laughs at you and points his spear at your chest."
+  },
+  {
+   "start": 151.151,
+   "end": 153.508,
+   "speaker": "Dana",
+   "text": "The guard laughs at you and points his spear at your chest."
+  }
+ ]
+}

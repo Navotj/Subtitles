@@ -1,0 +1,50 @@
+[
+ {
+  "start": 17.04,
+  "end": 18.81,
+  "text": "I cast shield as a reaction.",
+  "kind": "quiet"
+ },
+ {
+  "start": 52.91,
+  "end": 55.63,
+  "text": "My wizard checks the bookshelf for anything magical.",
+  "kind": "quiet"
+ },
+ {
+  "start": 89.73,
+  "end": 91.23,
+  "text": "How much gold do we have left?",
+  "kind": "quiet"
+ },
+ {
+  "start": 125.51,
+  "end": 127.46,
+  "text": "I run to the door and try to lock it.",
+  "kind": "quiet"
+ },
+ {
+  "start": 157.68,
+  "end": 159.38,
+  "text": "I think we should rest here tonight.",
+  "kind": "quiet"
+ },
+ {
+  "start": 40.0,
+  "end": 41.28,
+  "text": "Can I see the map again?",
+  "kind": "over"
+ },
+ {
+  "start": 95.0,
+  "end": 96.22,
+  "text": "Twenty three to hit.",
+  "kind": "over"
+ },
+ {
+  "start": 150.0,
+  "end": 152.68,
+  "text": "I'll hold my action until the goblin comes closer.",
+  "kind": "over"
+ }
+]
