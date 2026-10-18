@@ -853,19 +853,45 @@ def list_output_devices():
     finally:
         p.terminate()
 
+def list_listen_sources():
+    """-> [(value, label)] for "Listen to": what playback devices play, plus recording devices
+    (a virtual cable's output, e.g. "CABLE Output", carries whatever Discord sends into the cable)"""
+    out = [(n, n) for _, n in list_output_devices()]
+    try:
+        out += [("rec:" + n, n + "  (recording device)") for _, n in list_input_devices()]
+    except Exception as e:
+        log(f"[audio] could not list recording devices: {e}")
+    return out
+
+
 class AudioSource:
     """Captures what a playback device is playing (WASAPI loopback) -> 16 kHz mono float32 chunks in self.q"""
     def __init__(self, want="auto", mic=False):
         import pyaudiowpatch as pyaudio, soxr
+        if want and want.startswith("rec:"): want, mic = want[4:], True        # a recording device as the call
         self.pa = pyaudio.PyAudio(); self.pyaudio = pyaudio; self.mic = mic
         self.q = queue.Queue()
         self.level = -90.0
         self.dev = self._pick(want)
-        self.rate = int(self.dev["defaultSampleRate"]); self.ch = max(1, int(self.dev["maxInputChannels"]))
-        self.rs = soxr.ResampleStream(self.rate, SR, 1, dtype="float32")
-        self.stream = self.pa.open(format=pyaudio.paFloat32, channels=self.ch, rate=self.rate, input=True,
-                                   input_device_index=self.dev["index"], frames_per_buffer=int(self.rate * 0.03),
-                                   stream_callback=self._cb)
+        rate0, ch0 = int(self.dev["defaultSampleRate"]), max(1, int(self.dev["maxInputChannels"]))
+        # some drivers refuse the first format; try a few common ones before giving up
+        tries = [(pyaudio.paFloat32, ch0, rate0), (pyaudio.paInt16, ch0, rate0), (pyaudio.paFloat32, 2, 48000),
+                 (pyaudio.paInt16, 2, 48000), (pyaudio.paFloat32, 2, 44100), (pyaudio.paInt16, 2, 44100),
+                 (pyaudio.paFloat32, 1, rate0), (pyaudio.paInt16, 1, rate0)]
+        err = None
+        for fmt, ch, rate in dict.fromkeys(tries):
+            try:
+                self.fmt, self.ch, self.rate = fmt, ch, rate
+                self.rs = soxr.ResampleStream(rate, SR, 1, dtype="float32")
+                self.stream = self.pa.open(format=fmt, channels=ch, rate=rate, input=True,
+                                           input_device_index=self.dev["index"], frames_per_buffer=int(rate * 0.03),
+                                           stream_callback=self._cb)
+                break
+            except Exception as e:
+                err = e
+        else:
+            self.pa.terminate()
+            raise OSError(f"could not open {self.dev['name']}: {err}")
         self.name = self.dev["name"]
         log(f"[audio] {'microphone' if mic else 'listening to'}: {self.name} ({self.rate} Hz, {self.ch} ch)")
 
@@ -891,7 +917,8 @@ class AudioSource:
         return self.pa.get_default_wasapi_loopback()
 
     def _cb(self, data, frames, info, status):
-        x = np.frombuffer(data, dtype=np.float32)
+        if self.fmt == self.pyaudio.paInt16: x = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+        else: x = np.frombuffer(data, dtype=np.float32)
         if self.ch > 1: x = x.reshape(-1, self.ch).mean(axis=1)
         y = self.rs.resample_chunk(x.astype(np.float32))
         if len(y):

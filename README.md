@@ -19,7 +19,8 @@ Double-click `install.bat`. It installs `uv` if needed and creates a Python 3.11
 ## Use
 Start it from the desktop icon (no console window; messages go to `app.log`). Closing the **D&D Subtitles** window quits.
 
-- **Listen to:** the playback device Discord plays through. "Automatic" picks *Speakers (NVIDIA Broadcast)* if it exists, otherwise your default output.
+- **Listen to:** the playback device Discord plays through. "Automatic" picks *Speakers (NVIDIA Broadcast)* if it exists, otherwise your default output. Watch the **Sound** bar: it should move while people talk.
+  - If Discord outputs into a virtual cable (for example VB-Audio *CABLE Input*), pick that cable's recording side instead: *CABLE Output … (recording device)*.
 - **Voices:** people the app doesn't know show as **?**. Right-click a line in the transcript and pick
   - **Add as new voice…** to name them;
   - **This is ▸ name** to say who it was. This also teaches the app, so it gets better with every correction;
@@ -48,7 +49,7 @@ Start it from the desktop icon (no console window; messages go to `app.log`). Cl
 | `make_shortcut.ps1` | (re)create the desktop icon |
 | `selftest.py` | runs a recorded call through the engine and scores who-said-what: `selftest.bat test\conversation.flac --truth test\conversation.json` |
 | `echotest.py` | checks your mic lines are kept and the call's echo is not: `echotest.py test\call2.flac test\mic.flac test\mic.json` |
-| `audiotest.py` | lists audio devices and records a few seconds (`audiotest.py mic` for the microphone) |
+| `audiotest.py` | lists what the app can listen to and records a few seconds from one (`audiotest.py "rec:CABLE Output"`, `audiotest.py mic`) |
 | `test\` | synthetic test calls made with computer voices (no real people) |
 | `tools\` | scripts that made the test calls |
 

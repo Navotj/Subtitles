@@ -679,7 +679,7 @@ class Panel(QtWidgets.QWidget):
         self.dev.blockSignals(True); self.dev.clear()
         self.dev.addItem("Automatic (NVIDIA Broadcast speakers if present, else default)", "auto")
         try:
-            for _, name in engine.list_output_devices(): self.dev.addItem(name, name)
+            for value, label in engine.list_listen_sources(): self.dev.addItem(label, value)
         except Exception as e:
             log(f"[audio] could not list devices: {e}")
         want = self.cfg.get("audio_device", "auto")
