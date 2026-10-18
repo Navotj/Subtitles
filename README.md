@@ -27,9 +27,9 @@ Start it from the desktop icon (no console window; messages go to `app.log`). Cl
 
   Click a colour box to change a colour.
 - **Groups:** each D&D group has its own voices (`groups\<group>.json`). Switch, add or rename groups at the top of the window. Your own voice is shared by all groups.
-- **Your own voice:** your mic is added to the transcript only, never to the subtitles. Echo of the call that your mic picks up is recognised and ignored. Use **Relearn my voice** if your lines look wrong.
+- **Your own voice:** your mic is added to the transcript only, never to the subtitles. It is labelled with your Windows user name; change it under **My name**. Echo of the call that your mic picks up is recognised and ignored. Use **Relearn my voice** if your lines look wrong.
 - **Transcripts:** saved in `transcripts\<group>\<date>.txt`. Reopening within an hour carries on in the same file, even past midnight. Fixes and renames are written into the file too. Select lines with Ctrl or Shift-click and copy them with right-click or Ctrl+C. "Natural 20" is highlighted.
-- **Word fixes…:** always replace a misheard word, for example *kindergarten → Kindigar*. The right-hand words are also given to Whisper as words to expect. Words to expect and word fixes are saved per group.
+- **Word fixes…:** always replace a misheard word, for example *straw → Strahd*. The right-hand words are also given to Whisper as words to expect. Words to expect and word fixes are saved per group.
 - **Display:** text size, number of lines, position (left, centre or right), width, background darkness and screen. The window stays click-through over games; use borderless or windowed mode.
 
 ## How it works (short)

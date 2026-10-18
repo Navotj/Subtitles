@@ -49,11 +49,11 @@ DEFAULT_CONFIG = {
     "change_threshold": 0.35,          # voice before/after a point this different -> a different person took over
     "max_segment_seconds": 10,
     "group": "Group 1",                # which D&D group's voices are in use (groups\\<name>.json)
-    "word_fixes": [["kindergarten", "Kindigar"]],     # always turn the first into the second
+    "word_fixes": [],                  # [["heard as", "replace with"], ...] (kept per group)
     "hide_short_unknown": True,
     "echo_threshold": 0.5,             # mic audio that follows the call this closely is echo, not you        # transcript: hide 1-2 word lines nobody was recognised for
     "my_voice": True,                  # add your own microphone to the transcript (not the subtitles)
-    "my_name": "Navot",
+    "my_name": "",                     # empty = your Windows user name
     "my_color": "#FF6B6B",
     "mic_device": "auto",              # "auto" = NVIDIA Broadcast microphone if present, else Windows default
 }
@@ -74,7 +74,13 @@ def load_config():
             with open(p, encoding="utf-8") as f: cfg.update(json.load(f))
         except Exception as e:
             print(f"[config] could not read config.json ({e}); using defaults", flush=True)
+    if not cfg.get("my_name"): cfg["my_name"] = default_my_name()
     return cfg
+
+def default_my_name():
+    n = (os.environ.get("USERNAME") or os.environ.get("USER") or "").strip()
+    return n[:1].upper() + n[1:] if n else "Me"
+
 
 def save_config(cfg):
     p = os.path.join(HERE, "config.json"); tmp = p + ".tmp"
