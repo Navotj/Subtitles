@@ -45,16 +45,18 @@ def ended(text):
     return len(re.findall(r"[\w']+", last)) >= MIN_SENTENCE_WORDS
 
 
-def split_rows(text, max_chars=95):
-    """Rows for display: a new row after each sentence end; a long sentence is broken after a comma."""
+def split_rows(text, max_chars=95, fits=None):
+    """Rows for display: a new row after each sentence end; a long sentence is broken after a comma.
+    fits(s) -> does s fit on one row (measured); without it, rows are limited to max_chars characters."""
+    fits = fits or (lambda x: len(x) <= max_chars)
     rows = []
     for sent in sentences(text):
         if not sent: continue
-        if len(sent) <= max_chars: rows.append(sent); continue
+        if fits(sent): rows.append(sent); continue
         cur = ""; clauses = re.split(r"(?<=,)\s+", sent)
         for i, c in enumerate(clauses):
             rest = len(" ".join(clauses[i:]))
-            if cur and len(cur) + 1 + len(c) > max_chars and rest >= 30: rows.append(cur); cur = c   # no tiny leftovers
+            if cur and not fits(cur + " " + c) and rest >= 30: rows.append(cur); cur = c   # no tiny leftovers
             else: cur = (cur + " " + c).strip()
         if cur: rows.append(cur)
     return rows
@@ -325,7 +327,8 @@ class Overlay(QtWidgets.QWidget):
         maxc = max(20, int((width - nw) / (fm.averageCharWidth() * 1.08)))     # what fits on one row of the box
         rows = []
         for l in ls:
-            r = [[html.escape(x), x] for x in split_rows(l["final"], maxc)]
+            room = (width - nw) * 0.98
+            r = [[html.escape(x), x] for x in split_rows(l["final"], maxc, fits=lambda t: fm.horizontalAdvance(t) <= room)]
             if l["ptext"]:
                 if r and not ended(l["final"]): r[-1][0] += " " + html.escape(l["ptext"]); r[-1][1] += " " + l["ptext"]
                 else: r.append([html.escape(l["ptext"]), l["ptext"]])

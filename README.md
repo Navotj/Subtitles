@@ -4,6 +4,8 @@ Live subtitles for Discord voice calls, made for tabletop sessions where people 
 At the bottom of the screen it shows **`Name: what they said`**, the whole line in that person's colour. A side
 transcript keeps the whole session, saved per group and per day.
 
+![D&D Subtitles in use (mockup)](docs/mockup.png)
+
 Everything runs locally on your PC. Nothing is sent anywhere, and no audio is stored.
 
 - **Speech to text:** OpenAI Whisper *large-v3-turbo* via faster-whisper, on the GPU (CUDA).
