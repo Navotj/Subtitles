@@ -36,7 +36,7 @@ Start it from the desktop icon (no console window; messages go to `app.log`). Cl
 
 ## How it works (short)
 1. Audio from the call is cut into stretches of speech. Each stretch is transcribed by Whisper. While someone is still talking, a quick partial transcript is shown first; words that two guesses in a row agree on are locked in.
-2. Each stretch gets voice fingerprints. If the voice changes mid-stretch (someone jumps in), it is split at that point, even while they are still talking.
+2. Each stretch gets voice fingerprints. If the voice changes mid-stretch (someone jumps in), it is split at that point, even while they are still talking. This is checked a few times a second: a quick check on the last couple of seconds, and a scan of the whole stretch so a change is found however long ago it happened.
 3. Fingerprints are matched against the group's saved voices. Confident matches refine that voice. Short or uncertain bits stay **?**.
 4. Mic lines are compared with what the call was playing at the same moment. Audio that rises and falls with the call is echo and is dropped.
 
@@ -52,6 +52,6 @@ Start it from the desktop icon (no console window; messages go to `app.log`). Cl
 | `echotest.py` | checks your mic lines are kept and the call's echo is not: `echotest.py test\call2.flac test\mic.flac test\mic.json` |
 | `audiotest.py` | lists what the app can listen to and records a few seconds from one (`audiotest.py "rec:CABLE Output"`, `audiotest.py mic`) |
 | `test\` | synthetic test calls made with computer voices (no real people) |
-| `tools\` | scripts that made the test calls |
+| `tools\` | scripts that made the test calls, and `speaker_latency.py`, which measures how fast a new speaker is noticed (`python tools\speaker_latency.py`) |
 
 Personal data (`groups\`, `my_voice.json`, `transcripts\`, `config.json`, `app.log`) is kept out of git by `.gitignore`.

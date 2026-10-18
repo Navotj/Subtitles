@@ -673,11 +673,13 @@ class Pipeline:
             if kind in ("start", "end"): self._note(kind, forced)
             if kind == "start":
                 self.utt += 1; self.last_partial_len = 0; self.partial_voice = None; self.new_speaker = False
+                self.sc_len = self.fast_len = 0; self.sc_cache = {}; self.sc_next = 0
             elif kind == "end":
                 self._final(*utt)
                 if forced:                              # the rest continues as a new utterance
-                    self.utt += 1; self.last_partial_len = 0
+                    self.utt += 1; self.last_partial_len = 0; self.sc_len = self.fast_len = 0
             elif kind == "grow":
+                if self._maybe_split(): self.last_partial_len = 0      # show the newcomer's first words right away
                 self._maybe_partial()
 
     def flush(self):
@@ -691,33 +693,85 @@ class Pipeline:
         if not hasattr(self, "said"): self._note("init")
         self.said.append((self.clock(), text)); self.said = self.said[-60:]
 
-    def _speaker_change(self, a):
-        """while someone is talking: did a different person take over in the last ~2 s? -> cut sample or None"""
-        if self.source != "call" or len(a) < int(2.8 * SR): return None
+    # ---- speaker change while someone is talking (nobody paused, so the voice detector sees one long stretch)
+    SC_EVERY = 0.3                     # seconds of new audio between checks
+    SC_FAST_EVERY = 0.6                # the fast check (below) is a bit more expensive, so less often
+    SC_MIN = 2.8                       # the fast check needs a stretch at least this long
+    SC_QUICK = (1.2, 3.2)              # fast check: newest 1.2 s against the 2 s before it -> "did something change?"
+    SC_LEFT = 1.4
+    SC_CUTS = ((2.0, 0.0), (1.7, 0.0), (1.4, 0.0), (1.1, 0.0))   # (seconds of newcomer audio, extra similarity allowed)
+    SC_W, SC_G = 1.6, 0.4              # scan: compare 1.6 s before and after every 0.4 s point in the stretch
+    SC_SCAN_EXTRA = 0.0                # added to change_threshold for the scan (negative = needs a clearer difference)
+
+    def _fast_change(self, a):
+        """quick: did a different person take over in the last ~2 s? -> cut sample or None"""
+        if len(a) < int(self.SC_MIN * SR): return None
         thr = self.cfg.get("change_threshold", 0.35)
-        quick = float(self.emb(a[-int(1.2 * SR):]) @ self.emb(a[-int(3.2 * SR):-int(1.2 * SR)]))
+        qn, qb = self.SC_QUICK
+        quick = float(self.emb(a[-int(qn * SR):]) @ self.emb(a[max(0, len(a) - int(qb * SR)):-int(qn * SR)]))
         if quick >= thr + 0.12: return None
-        best = (1.0, None)
-        for back in (2.0, 1.7, 1.4, 1.1):
+        best = (0.0, None)                       # most negative margin below its threshold wins
+        for back, extra in self.SC_CUTS:
             cut = len(a) - int(back * SR)
-            if cut < int(1.2 * SR): continue
-            l = self.emb(a[max(0, cut - int(1.4 * SR)):cut]); r = self.emb(a[cut:])
-            sim = float(l @ r)
-            if sim < best[0]: best = (sim, cut)
-        return best[1] if best[0] < thr else None
+            if cut < int(1.0 * SR): continue
+            l = self.emb(a[max(0, cut - int(self.SC_LEFT * SR)):cut]); r = self.emb(a[cut:])
+            margin = float(l @ r) - (thr + extra)
+            if margin < best[0]: best = (margin, cut)
+        return best[1]
+
+    def _scan_change(self, a):
+        """the same idea as the split made once a stretch is over, but live: compare the voice 1.6 s before and
+        after every 0.4 s point. Fingerprints are kept between checks, so each check adds only about one new one.
+        Finds a change however long ago it happened (the fast check only looks at the last ~2 s)."""
+        W, G = int(self.SC_W * SR), int(self.SC_G * SR)
+        base = self.seg.t0                          # absolute sample number of a[0]
+        cache = self.__dict__.setdefault("sc_cache", {})
+        def E(i0, i1):
+            k = (base + i0, base + i1)
+            if k not in cache: cache[k] = self.emb(a[i0:i1])
+            return cache[k]
+        thr = self.cfg.get("change_threshold", 0.35) + self.SC_SCAN_EXTRA
+        k = max(getattr(self, "sc_next", 0), -(-(base + int(0.8 * SR)) // G))      # first point >= 0.8 s into the stretch
+        best = (thr, None)
+        while True:
+            rel = k * G - base
+            if rel + W > len(a): break               # the newcomer's 1.6 s are not all here yet
+            sim = float(E(max(0, rel - W), rel) @ E(rel, rel + W))
+            if sim < best[0]: best = (sim, rel)
+            k += 1
+        self.sc_next = k
+        return best[1]
+
+    def _speaker_change(self, a):
+        if self.source != "call": return None
+        n = len(a)
+        cut = None
+        if n - getattr(self, "fast_len", 0) >= int(self.SC_FAST_EVERY * SR) or n < getattr(self, "fast_len", 0):
+            self.fast_len = n
+            cut = self._fast_change(a)
+        return cut if cut is not None else self._scan_change(a)
+
+    def _maybe_split(self):
+        """a few times a second: someone else started talking in the middle of this stretch? close the first
+        person's line now. True if it was split."""
+        if not self.partials or not self.cfg.get("show_partial", True) or self.behind: return False
+        a = self.seg.current()
+        n = len(a)
+        if 0 <= n - getattr(self, "sc_len", 0) < int(self.SC_EVERY * SR): return False
+        self.sc_len = n
+        cut = self._speaker_change(a)
+        if cut is None: return False
+        self._final(*self.seg.split_at(cut))
+        self.utt += 1; self.partial_voice = None; self.new_speaker = True
+        self.stats["early_splits"] = self.stats.get("early_splits", 0) + 1
+        self.sc_len = self.fast_len = len(self.seg.current())
+        return True
 
     def _maybe_partial(self):
         if not self.partials or not self.cfg.get("show_partial", True) or self.behind: return
         a = self.seg.current()
         if len(a) < int(0.7 * SR) or len(a) - self.last_partial_len < int(0.6 * SR): return
         self.last_partial_len = len(a)
-        cut = self._speaker_change(a)
-        if cut is not None:                    # someone else started talking: close the first person's line now
-            self._final(*self.seg.split_at(cut))
-            self.utt += 1; self.partial_voice = None; self.new_speaker = True
-            self.stats["early_splits"] = self.stats.get("early_splits", 0) + 1
-            a = self.seg.current(); self.last_partial_len = len(a)
-            if len(a) < int(0.7 * SR): return
         tail = a[-int(6 * SR):]
         if len(a) >= SR and (self.partial_voice is None or len(a) < 4 * SR):
             ranked = self.bank.classify(self.emb(tail))
