@@ -556,7 +556,7 @@ class Panel(QtWidgets.QWidget):
         g.addWidget(QtWidgets.QLabel("Words to expect"), 4, 0)
         self.voc = QtWidgets.QLineEdit(cfg.get("vocabulary", ""))
         self.voc.setPlaceholderText("Character names, places, spells… e.g. Thalindra, Neverwinter, Eldritch Blast")
-        self.voc.editingFinished.connect(lambda: self.set("vocabulary", self.voc.text().strip()))
+        self.voc.editingFinished.connect(lambda: self.set_group_value("vocabulary", self.voc.text().strip()))
         g.addWidget(self.voc, 4, 1, 1, 3)
         g.addWidget(QtWidgets.QLabel("Background darkness"), 5, 0)
         bgs = QtWidgets.QSlider(Qt.Horizontal); bgs.setRange(0, 100)
@@ -622,10 +622,21 @@ class Panel(QtWidgets.QWidget):
         self.group.addItems(names); self.group.setCurrentText(cur)
         self.group.blockSignals(False)
 
+    def set_group_value(self, key, value):
+        """words to expect / word fixes belong to the current group (saved in its file)"""
+        self.cfg[key] = value
+        self.bank.extra[key] = value; self.bank.save(force=True)
+
+    def load_group_values(self):
+        self.cfg["vocabulary"] = self.bank.extra.get("vocabulary", "")
+        self.cfg["word_fixes"] = self.bank.extra.get("word_fixes", [])
+        if hasattr(self, "voc"): self.voc.setText(self.cfg["vocabulary"])
+
     def switch_group(self, name):
         if not name or name == self.cfg.get("group"): return
         self.set("group", name)
         self.bank.switch(engine.group_path(name))
+        self.load_group_values()
         self.save_session()
         self.overlay.lines = []; self.overlay.update()
         self.open_session()
@@ -1034,7 +1045,7 @@ class Panel(QtWidgets.QWidget):
             a = (tab.item(r, 0).text() if tab.item(r, 0) else "").strip()
             b = (tab.item(r, 1).text() if tab.item(r, 1) else "").strip()
             if a and b: fixes.append([a, b])
-        self.set("word_fixes", fixes)
+        self.set_group_value("word_fixes", fixes)
         for i in range(self.tlist.count()):                 # fix what's already in the transcript too
             it = self.tlist.item(i); d = it.data(Qt.UserRole)
             t = engine.apply_fixes(d["text"], fixes)
@@ -1109,6 +1120,10 @@ def main():
             cfg["group"] = engine.list_groups()[0]
         engine.save_config(cfg)
         bank = engine.VoiceBank(path=engine.group_path(cfg["group"]), model=cfg["voice_model"])
+        if "vocabulary" not in bank.extra and "word_fixes" not in bank.extra:     # lists used to be shared
+            bank.extra = {"vocabulary": cfg.get("vocabulary", ""), "word_fixes": cfg.get("word_fixes", [])}
+            bank.save(force=True)
+        cfg["vocabulary"] = bank.extra.get("vocabulary", ""); cfg["word_fixes"] = bank.extra.get("word_fixes", [])
     bridge = Bridge()
     bank.on_change = lambda k: bridge.voices_changed.emit(k)
     overlay = Overlay(cfg, bank); overlay.show()

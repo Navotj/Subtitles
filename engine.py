@@ -114,6 +114,7 @@ class VoiceBank:
         self.aliases = {}           # merged-away id -> id it was merged into (for lines already on screen)
         self.me = []                # your own voice fingerprints (from your mic, used to ignore echo of the call)
         self.me_counts = []
+        self.extra = {}             # group settings kept with the voices: words to expect, word fixes
         self.on_change = None       # callback(kind) kind in {"added","removed","updated"}
         self._dirty = False
         self.load()
@@ -138,7 +139,7 @@ class VoiceBank:
         """use another group's voices (your own voice stays)"""
         self.save(force=True)
         with self.lock:
-            self.voices = {}; self.aliases = {}; self.next_id = 1; self.path = path
+            self.voices = {}; self.aliases = {}; self.next_id = 1; self.path = path; self.extra = {}
         self.load()
         self._changed("removed")
 
@@ -155,6 +156,7 @@ class VoiceBank:
             if d.get("me_version") == 3 and not os.path.exists(MY_VOICE):   # (older files kept you in here)
                 self.me = [np.asarray(p, dtype=np.float32) for p in d.get("me", [])]
                 self.me_counts = d.get("me_counts", [1] * len(self.me))
+            self.extra = {k: d[k] for k in ("vocabulary", "word_fixes") if k in d}
             for v in d.get("voices", []):
                 if "protos" in v:
                     v["protos"] = [np.asarray(p, dtype=np.float32) for p in v["protos"]]
@@ -171,7 +173,7 @@ class VoiceBank:
         with self.lock:
             if not (self._dirty or force): return
             self.save_me()
-            d = {"model": self.model, "next_id": self.next_id, "voices": [
+            d = {"model": self.model, "next_id": self.next_id, **self.extra, "voices": [
                 {k: ([p.tolist() for p in v[k]] if k == "protos" else v[k]) for k in
                  ("id", "name", "color", "protos", "pcounts", "count", "last_text", "last_heard")}
                 for v in self.voices.values()]}
