@@ -47,7 +47,7 @@ Start it from the desktop icon (no console window; messages go to `app.log`). Cl
 | file | what |
 |---|---|
 | `app.py` | windows: subtitle overlay, control window, transcript |
-| `wordswap.py` | the automatic word swap (`python tools\\test_wordswap.py` checks it) |
+| `wordswap.py` | the automatic word swap (`python tools\test_wordswap.py` checks it) |
 | `engine.py` | audio capture, speech detection, Whisper, voice matching, echo filter |
 | `install.bat` / `install.ps1` | setup |
 | `Subtitles.bat` | start without the desktop icon |
