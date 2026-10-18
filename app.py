@@ -592,8 +592,8 @@ class Panel(QtWidgets.QWidget):
             rb = QtWidgets.QPushButton("Reset"); rb.setFixedWidth(60); rb.clicked.connect(lambda: sp.setValue(0))
             h.addWidget(sl, 1); h.addWidget(sp); h.addWidget(rb)
             g.addLayout(h, row, 1, 1, 3)
-        offset("Horizontal (X)", "0 = centred. Negative moves left, positive moves right.", "overlay_x_px", geo.width() // 2, 4)
-        offset("Vertical (Y)", "0 = near the bottom. Negative moves up, positive moves down.", "overlay_y_px", geo.height() // 2, 5)
+        offset("Horizontal offset", "0 = centred. Negative moves left, positive moves right.", "overlay_x_px", geo.width() // 2, 4)
+        offset("Vertical offset", "0 = near the bottom. Negative moves up, positive moves down.", "overlay_y_px", geo.height() // 2, 5)
 
         g.addWidget(QtWidgets.QLabel("Words to expect"), 6, 0)
         self.voc = QtWidgets.QLineEdit(cfg.get("vocabulary", ""))
