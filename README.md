@@ -19,7 +19,7 @@ Double-click `install.bat`. It installs `uv` if needed and creates a Python 3.11
 ## Use
 Start it from the desktop icon (no console window; messages go to `app.log`). Closing the **D&D Subtitles** window quits.
 
-- **Listen to:** the playback device Discord plays through. "Automatic" picks *Speakers (NVIDIA Broadcast)* if it exists, otherwise your default output. Watch the **Sound** bar: it should move while people talk.
+- **System audio / My mic:** side by side at the top. System audio is the playback device Discord plays through; the lists refresh every time you open them. "Automatic" picks *Speakers (NVIDIA Broadcast)* if it exists, otherwise your default output (same idea for the mic). Watch the **Sound** bar: it should move while people talk.
   - If Discord outputs into a virtual cable (for example VB-Audio *CABLE Input*), pick that cable's recording side instead: *CABLE Output … (recording device)*.
 - **Voices:** people the app doesn't know show as **?**. Right-click a line in the transcript and pick
   - **Add as new voice…** to name them;
@@ -29,9 +29,10 @@ Start it from the desktop icon (no console window; messages go to `app.log`). Cl
   Click a colour box to change a colour.
 - **Groups:** each D&D group has its own voices (`groups\<group>.json`). Switch, add or rename groups at the top of the window. Your own voice is shared by all groups.
 - **Your own voice:** your mic is added to the transcript only, never to the subtitles. It is labelled with your Windows user name; change it under **My name**. Echo of the call that your mic picks up is recognised and ignored. Use **Relearn my voice** if your lines look wrong.
-- **Transcripts:** saved in `transcripts\<group>\<date>.txt`. Reopening within an hour carries on in the same file, even past midnight. Fixes and renames are written into the file too. Select lines with Ctrl or Shift-click and copy them with right-click or Ctrl+C. "Natural 20" is highlighted.
+- **Transcripts:** saved in `transcripts\<group>\<date>_<time>.txt` (for example `2026-10-19_01-45.txt`). If you reopen the app within 5 minutes it carries on in the same file. Between 5 minutes and an hour it asks "Is this a continuation of the previous session from …?". After an hour it starts a new file. Fixes and renames are written into the file too. Select lines with Ctrl or Shift-click and copy them with right-click or Ctrl+C. "Natural 20" is highlighted.
+- **Keep transcript:** untick it and nothing is written to a file; the transcript window only shows the last minute.
 - **Word fixes…:** always replace a misheard word, for example *straw → Strahd*. The right-hand words are also given to Whisper as words to expect. Words to expect and word fixes are saved per group.
-- **Display:** text size, number of lines, position (left, centre or right), width, background darkness and screen. The window stays click-through over games; use borderless or windowed mode.
+- **Display:** text size and width, number of lines, how long lines stay, screen, background darkness, and position. Position is two sliders in pixels, **Horizontal (X)** and **Vertical (Y)**, which you can also type into; 0 and 0 is centred near the bottom, negative moves left/up, positive moves right/down. The window stays click-through over games; use borderless or windowed mode.
 
 ## How it works (short)
 1. Audio from the call is cut into stretches of speech. Each stretch is transcribed by Whisper. While someone is still talking, a quick partial transcript is shown first; words that two guesses in a row agree on are locked in.

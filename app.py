@@ -18,6 +18,7 @@ os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 HERE = engine.HERE
 TRANSCRIPTS = os.path.join(HERE, "transcripts")
+BOTTOM_MARGIN = 90            # px between the subtitles and the bottom of the screen when the Y offset is 0
 
 
 MIN_SENTENCE_WORDS = 4
@@ -225,11 +226,9 @@ class Overlay(QtWidgets.QWidget):
         g = sc.geometry()
         w = int(g.width() * self.cfg.get("overlay_width_pct", 75) / 100)
         h = int(g.height() * 0.6)
-        side = int(self.cfg.get("overlay_side_px", 40)); al = self.cfg.get("align", "center")
-        if al == "left": x = g.x() + side
-        elif al == "right": x = g.x() + g.width() - w - side
-        else: x = g.x() + (g.width() - w) // 2
-        y = g.y() + g.height() - h - int(self.cfg.get("overlay_bottom_px", 90))
+        # 0, 0 = centred, a little above the bottom edge. x: + right, - left.  y: + down, - up.
+        x = g.x() + (g.width() - w) // 2 + int(self.cfg.get("overlay_x_px", 0))
+        y = g.y() + g.height() - h - BOTTOM_MARGIN + int(self.cfg.get("overlay_y_px", 0))
         self.setGeometry(x, y, w, h)
         self._docs.clear(); self.update()
 
@@ -465,6 +464,15 @@ class Overlay(QtWidgets.QWidget):
 
 
 # =============================================================================================== control window
+class RescanCombo(QtWidgets.QComboBox):
+    """A drop-down that asks for its list to be rebuilt every time it is opened (so a headset plugged in
+    a minute ago, or a virtual cable that was started later, shows up without a Refresh button)."""
+    about_to_show = QtCore.Signal()
+    def showPopup(self):
+        self.about_to_show.emit()
+        super().showPopup()
+
+
 class Panel(QtWidgets.QWidget):
     def __init__(self, cfg, bank, overlay, bridge):
         super().__init__()
@@ -513,9 +521,19 @@ class Panel(QtWidgets.QWidget):
         self.status.setWordWrap(True); lay.addWidget(self.status)
 
         row = QtWidgets.QHBoxLayout()
-        row.addWidget(QtWidgets.QLabel("Listen to:"))
-        self.dev = QtWidgets.QComboBox(); self.dev.setMinimumWidth(380); row.addWidget(self.dev, 1)
-        b = QtWidgets.QPushButton("Refresh"); b.clicked.connect(self.fill_devices); row.addWidget(b)
+        row.addWidget(QtWidgets.QLabel("System audio:"))
+        self.dev = RescanCombo(); self.dev.setMinimumWidth(260)
+        self.dev.setToolTip("What you hear: the output the call plays through. Automatic picks NVIDIA Broadcast speakers if you have them, "
+                          "otherwise the Windows default. The list refreshes each time you open it.")
+        self.dev.about_to_show.connect(self.fill_devices); row.addWidget(self.dev, 1)
+        row.addSpacing(16)
+        row.addWidget(QtWidgets.QLabel("My mic:"))
+        self.mic_dev = RescanCombo(); self.mic_dev.setMinimumWidth(260)
+        self.mic_dev.setToolTip("Your own microphone (added to the transcript only). Automatic picks the NVIDIA Broadcast mic if you have one, "
+                              "otherwise the Windows default. The list refreshes each time you open it.")
+        self.mic_dev.about_to_show.connect(self.fill_mics); row.addWidget(self.mic_dev, 1)
+        self.mic_status = QtWidgets.QLabel(""); self.mic_status.setStyleSheet("color:#888"); row.addWidget(self.mic_status)
+        row.addSpacing(16)
         row.addWidget(QtWidgets.QLabel("Sound:"))
         self.meter = QtWidgets.QProgressBar(); self.meter.setRange(0, 60); self.meter.setTextVisible(False)
         self.meter.setFixedWidth(120); row.addWidget(self.meter)
@@ -537,13 +555,14 @@ class Panel(QtWidgets.QWidget):
         self.cb_show = QtWidgets.QCheckBox("Show subtitles"); self.cb_show.setChecked(True)
         self.cb_show.toggled.connect(lambda v: self.overlay.setVisible(v))
         g.addWidget(self.cb_show, 0, 0); g.addWidget(self.cb_part, 0, 1, 1, 3)
+        g.setColumnStretch(1, 1); g.setColumnStretch(3, 1)
 
         def spin(key, lo, hi, step=1, suffix=""):
             s = QtWidgets.QSpinBox(); s.setRange(lo, hi); s.setSingleStep(step); s.setValue(int(cfg[key])); s.setSuffix(suffix)
             s.valueChanged.connect(lambda v: (self.set(key, v), self.overlay.place())); return s
         g.addWidget(QtWidgets.QLabel("Text size"), 1, 0); g.addWidget(spin("font_size", 12, 72, 2, " px"), 1, 1)
-        g.addWidget(QtWidgets.QLabel("Lines on screen"), 1, 2); g.addWidget(spin("max_lines", 1, 8), 1, 3)
-        g.addWidget(QtWidgets.QLabel("Height from bottom"), 2, 0); g.addWidget(spin("overlay_bottom_px", 0, 1500, 10, " px"), 2, 1)
+        g.addWidget(QtWidgets.QLabel("Width"), 1, 2); g.addWidget(spin("overlay_width_pct", 30, 100, 5, " %"), 1, 3)
+        g.addWidget(QtWidgets.QLabel("Lines on screen"), 2, 0); g.addWidget(spin("max_lines", 1, 8), 2, 1)
         g.addWidget(QtWidgets.QLabel("Seconds on screen"), 2, 2); g.addWidget(spin("line_seconds", 2, 60), 2, 3)
         g.addWidget(QtWidgets.QLabel("Screen"), 3, 0)
         self.scr = QtWidgets.QComboBox()
@@ -551,14 +570,37 @@ class Panel(QtWidgets.QWidget):
             self.scr.addItem(f"{i + 1}: {s.name()} ({s.geometry().width()}×{s.geometry().height()})")
         self.scr.setCurrentIndex(min(int(cfg.get("screen", 0)), self.scr.count() - 1))
         self.scr.currentIndexChanged.connect(lambda i: (self.set("screen", i), self.overlay.place()))
-        g.addWidget(self.scr, 3, 1)
-        g.addWidget(QtWidgets.QLabel("Width"), 3, 2); g.addWidget(spin("overlay_width_pct", 30, 100, 5, " %"), 3, 3)
-        g.addWidget(QtWidgets.QLabel("Words to expect"), 4, 0)
+        g.addWidget(self.scr, 3, 1, 1, 3)
+
+        screens = QtGui.QGuiApplication.screens()
+        geo = screens[min(int(cfg.get("screen", 0)), len(screens) - 1)].geometry()
+        def offset(label, tip, key, span, row):
+            """slider + typed pixel box that stay in sync; 0 = default position, negatives allowed"""
+            g.addWidget(QtWidgets.QLabel(label), row, 0)
+            h = QtWidgets.QHBoxLayout()
+            sl = QtWidgets.QSlider(Qt.Horizontal); sl.setRange(-span, span)
+            sp = QtWidgets.QSpinBox(); sp.setRange(-5000, 5000); sp.setSuffix(" px"); sp.setFixedWidth(95)
+            sp.setValue(int(cfg.get(key, 0))); sl.setValue(max(-span, min(span, sp.value())))
+            sl.setToolTip(tip); sp.setToolTip(tip)
+            def apply(v): self.set(key, v); self.overlay.place()
+            def from_slider(v):
+                sp.blockSignals(True); sp.setValue(v); sp.blockSignals(False); apply(v)
+            def from_spin(v):
+                sl.blockSignals(True); sl.setValue(max(-span, min(span, v))); sl.blockSignals(False); apply(v)
+            sl.valueChanged.connect(from_slider); sp.valueChanged.connect(from_spin)
+            sl.sliderReleased.connect(self.overlay.demo)
+            rb = QtWidgets.QPushButton("Reset"); rb.setFixedWidth(60); rb.clicked.connect(lambda: sp.setValue(0))
+            h.addWidget(sl, 1); h.addWidget(sp); h.addWidget(rb)
+            g.addLayout(h, row, 1, 1, 3)
+        offset("Horizontal (X)", "0 = centred. Negative moves left, positive moves right.", "overlay_x_px", geo.width() // 2, 4)
+        offset("Vertical (Y)", "0 = near the bottom. Negative moves up, positive moves down.", "overlay_y_px", geo.height() // 2, 5)
+
+        g.addWidget(QtWidgets.QLabel("Words to expect"), 6, 0)
         self.voc = QtWidgets.QLineEdit(cfg.get("vocabulary", ""))
         self.voc.setPlaceholderText("Character names, places, spells… e.g. Thalindra, Neverwinter, Eldritch Blast")
         self.voc.editingFinished.connect(lambda: self.set_group_value("vocabulary", self.voc.text().strip()))
-        g.addWidget(self.voc, 4, 1, 1, 3)
-        g.addWidget(QtWidgets.QLabel("Background darkness"), 5, 0)
+        g.addWidget(self.voc, 6, 1, 1, 3)
+        g.addWidget(QtWidgets.QLabel("Background darkness"), 7, 0)
         bgs = QtWidgets.QSlider(Qt.Horizontal); bgs.setRange(0, 100)
         bgs.setValue(int(round(float(cfg.get("background_opacity", 0.55)) * 100)))
         bgl = QtWidgets.QLabel(f"{bgs.value()} %"); bgl.setFixedWidth(45)
@@ -566,37 +608,22 @@ class Panel(QtWidgets.QWidget):
             bgl.setText(f"{v} %"); self.set("background_opacity", v / 100); self.overlay.update()
         bgs.valueChanged.connect(bg_changed)
         bgs.sliderReleased.connect(self.overlay.demo)
-        g.addWidget(bgs, 5, 1, 1, 2); g.addWidget(bgl, 5, 3)
+        g.addWidget(bgs, 7, 1, 1, 2); g.addWidget(bgl, 7, 3)
         self.cb_me = QtWidgets.QCheckBox("Add my voice to the transcript")
         self.cb_me.setChecked(cfg.get("my_voice", True)); self.cb_me.toggled.connect(self.toggle_mic)
-        g.addWidget(self.cb_me, 6, 0, 1, 2)
-        g.addWidget(QtWidgets.QLabel("My name"), 6, 2)
+        g.addWidget(self.cb_me, 8, 0, 1, 2)
+        g.addWidget(QtWidgets.QLabel("My name"), 8, 2)
         self.me_name = QtWidgets.QLineEdit(cfg.get("my_name", "Me"))
         self.me_name.editingFinished.connect(lambda: self.set_my_name(self.me_name.text()))
-        g.addWidget(self.me_name, 6, 3)
-        g.addWidget(QtWidgets.QLabel("My mic"), 7, 0)
-        self.mic_dev = QtWidgets.QComboBox()
-        self.mic_dev.addItem("Automatic (NVIDIA Broadcast mic if present, else default)", "auto")
-        try:
-            for _, n in engine.list_input_devices(): self.mic_dev.addItem(n, n)
-        except Exception as e: log(f"[audio] could not list mics: {e}")
-        self.mic_dev.setCurrentIndex(max(self.mic_dev.findData(cfg.get("mic_device", "auto")), 0))
-        self.mic_dev.currentIndexChanged.connect(self.change_mic)
-        g.addWidget(self.mic_dev, 7, 1, 1, 2)
-        self.mic_status = QtWidgets.QLabel(""); self.mic_status.setStyleSheet("color:#888")
-        g.addWidget(self.mic_status, 7, 3)
-        g.addWidget(QtWidgets.QLabel("Text position"), 8, 0)
-        self.align = QtWidgets.QComboBox()
-        for label, key in (("Left", "left"), ("Center", "center"), ("Right", "right")): self.align.addItem(label, key)
-        self.align.setCurrentIndex(max(self.align.findData(cfg.get("align", "center")), 0))
-        self.align.currentIndexChanged.connect(lambda _: (self.set("align", self.align.currentData()),
-                                                          self.overlay.place(), self.overlay.demo()))
-        g.addWidget(self.align, 8, 1)
-        g.addWidget(QtWidgets.QLabel("Distance from side"), 8, 2); g.addWidget(spin("overlay_side_px", 0, 1500, 10, " px"), 8, 3)
+        g.addWidget(self.me_name, 8, 3)
         lay.addWidget(opt)
 
         br = QtWidgets.QHBoxLayout()
         b = QtWidgets.QPushButton("Show test lines"); b.clicked.connect(self.overlay.demo); br.addWidget(b)
+        self.cb_keep = QtWidgets.QCheckBox("Keep transcript")
+        self.cb_keep.setToolTip("Off: nothing is saved to a file, and the transcript only shows the last minute.")
+        self.cb_keep.setChecked(cfg.get("keep_transcript", True)); self.cb_keep.toggled.connect(self.toggle_keep)
+        br.addWidget(self.cb_keep)
         b = QtWidgets.QPushButton("Open transcripts folder"); b.clicked.connect(self.open_transcripts); br.addWidget(b)
         b = QtWidgets.QPushButton("Word fixes…"); b.setToolTip("Always turn a misheard word into the right one (e.g. straw → Strahd)")
         b.clicked.connect(self.edit_word_fixes); br.addWidget(b)
@@ -608,9 +635,13 @@ class Panel(QtWidgets.QWidget):
         bridge.status.connect(self.status.setText)
         bridge.ready.connect(self.on_ready)
         self.fill_devices(initial=True)
+        self.fill_mics()
+        self.mic_dev.currentIndexChanged.connect(self.change_mic)
         self.rebuild()
         self.meter_t = QtCore.QTimer(self, interval=120, timeout=self.update_meter); self.meter_t.start()
         self.save_t = QtCore.QTimer(self, interval=5000, timeout=lambda: self.bank.save()); self.save_t.start()
+        self.alive_t = QtCore.QTimer(self, interval=30000, timeout=self._write_state); self.alive_t.start()
+        self.trim_t = QtCore.QTimer(self, interval=5000, timeout=self._trim_transcript); self.trim_t.start()
         self.dev.currentIndexChanged.connect(self.change_device)
 
     # ---- groups (each D&D group has its own voices)
@@ -634,6 +665,7 @@ class Panel(QtWidgets.QWidget):
 
     def switch_group(self, name):
         if not name or name == self.cfg.get("group"): return
+        self.save_session(); self._write_state()          # the group we are leaving
         self.set("group", name)
         self.bank.switch(engine.group_path(name))
         self.load_group_values()
@@ -677,7 +709,7 @@ class Panel(QtWidgets.QWidget):
     # ---- audio devices
     def fill_devices(self, initial=False):
         self.dev.blockSignals(True); self.dev.clear()
-        self.dev.addItem("Automatic (NVIDIA Broadcast speakers if present, else default)", "auto")
+        self.dev.addItem("Automatic", "auto")
         try:
             for value, label in engine.list_listen_sources(): self.dev.addItem(label, value)
         except Exception as e:
@@ -685,6 +717,15 @@ class Panel(QtWidgets.QWidget):
         want = self.cfg.get("audio_device", "auto")
         i = self.dev.findData(want); self.dev.setCurrentIndex(max(i, 0))
         self.dev.blockSignals(False)
+
+    def fill_mics(self):
+        self.mic_dev.blockSignals(True); self.mic_dev.clear()
+        self.mic_dev.addItem("Automatic", "auto")
+        try:
+            for _, n in engine.list_input_devices(): self.mic_dev.addItem(n, n)
+        except Exception as e: log(f"[audio] could not list mics: {e}")
+        self.mic_dev.setCurrentIndex(max(self.mic_dev.findData(self.cfg.get("mic_device", "auto")), 0))
+        self.mic_dev.blockSignals(False)
 
     def change_device(self, *_):
         want = self.dev.currentData() or "auto"
@@ -764,13 +805,13 @@ class Panel(QtWidgets.QWidget):
                 if (d["voice"] == v and d.get("fixed") is None and v is not None
                         and not ended(d["text"]) and not d["text"].strip().endswith(",")):
                     rows = split_rows(d["text"].rstrip() + " " + " ".join(pieces))
-                    d["text"] = rows[0]
+                    d["text"] = rows[0]; d["ts"] = time.time()
                     if d.get("eid") is None: d["eid"] = eid
                     last.setData(Qt.UserRole, d); self.paint_item(last)
                     pieces = rows[1:]
             for sent in pieces:
                 it = QtWidgets.QListWidgetItem()
-                it.setData(Qt.UserRole, {"voice": v, "text": sent, "time": ts, "full": full, "eid": eid})
+                it.setData(Qt.UserRole, {"voice": v, "text": sent, "time": ts, "full": full, "eid": eid, "ts": time.time()})
                 self.tlist.addItem(it); self.paint_item(it)
         self.save_session_soon()
         if at_bottom: self.tlist.scrollToBottom()
@@ -967,18 +1008,24 @@ class Panel(QtWidgets.QWidget):
         d = os.path.join(TRANSCRIPTS, safe); os.makedirs(d, exist_ok=True); return d
 
     def open_session(self):
-        """carry on in the group's latest transcript if it was written less than an hour ago (closing and
-        reopening the app mid-session, even past midnight); otherwise start a new file named by today's date"""
-        folder = self.group_folder(); today = datetime.date.today().isoformat()
-        files = [os.path.join(folder, f) for f in os.listdir(folder) if re.match(r"^\d{4}-\d\d-\d\d.*\.txt$", f)]
-        latest = max(files, key=os.path.getmtime) if files else None
-        if latest and time.time() - os.path.getmtime(latest) < 3600:
-            self.session_path = latest
-        else:
-            path, n = os.path.join(folder, today + ".txt"), 2
-            while os.path.exists(path):                      # a second session on the same day
-                path = os.path.join(folder, f"{today} ({n}).txt"); n += 1
-            self.session_path = path
+        """Which transcript are we writing to?
+        - the app was closed only a few minutes ago (session_auto_resume_min): carry on in the same file;
+        - closed a little longer ago, up to an hour (session_ask_resume_min): ask whether it is the same session;
+        - longer than that: a new file, named by date and time (2026-10-19_01-45.txt)."""
+        if not self.cfg.get("keep_transcript", True):          # nothing is ever saved or reloaded
+            self.session_path = None; self.tlist.clear(); return
+        folder = self.group_folder()
+        prev, gap = self._previous_session(folder)
+        mins = gap / 60
+        self.session_path = None
+        if prev is not None:
+            if mins <= float(self.cfg.get("session_auto_resume_min", 5)):
+                self.session_path = prev
+            elif mins <= float(self.cfg.get("session_ask_resume_min", 60)):
+                if self._ask_continue(prev, mins): self.session_path = prev
+        if self.session_path is None:
+            self.session_path = self._new_session_path(folder)
+        self._write_state()
         self.tlist.clear()
         if not os.path.exists(self.session_path): return
         names = {v["name"]: v["id"] for v in self.bank.snapshot()}
@@ -998,13 +1045,82 @@ class Panel(QtWidgets.QWidget):
         except Exception as e:
             log(f"[transcript] could not read {self.session_path}: {e}")
 
+    # ---- which transcript was the app writing to, and when was it last running
+    def _state_path(self): return os.path.join(self.group_folder(), ".session.json")
+
+    def _write_state(self):
+        """called every 30 s while the app runs and when it closes: the file in use and 'last alive' time"""
+        if not getattr(self, "session_path", None) or not self.cfg.get("keep_transcript", True): return
+        try:
+            with open(self._state_path(), "w", encoding="utf-8") as f:
+                json.dump({"file": os.path.basename(self.session_path), "alive_at": time.time()}, f)
+        except Exception as e:
+            log(f"[transcript] could not write session state: {e}")
+
+    def _previous_session(self, folder):
+        """-> (path of the group's last transcript, seconds since the app was last running) or (None, 0)"""
+        try:
+            with open(os.path.join(folder, ".session.json"), encoding="utf-8") as f: st = json.load(f)
+            path = os.path.join(folder, st["file"])
+            if os.path.isfile(path): return path, max(0.0, time.time() - float(st["alive_at"]))
+        except Exception: pass
+        files = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".txt")]     # no state yet (older versions)
+        if not files: return None, 0
+        latest = max(files, key=os.path.getmtime)
+        return latest, max(0.0, time.time() - os.path.getmtime(latest))
+
+    @staticmethod
+    def _new_session_path(folder):
+        stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+        path, n = os.path.join(folder, stamp + ".txt"), 2
+        while os.path.exists(path):
+            path = os.path.join(folder, f"{stamp} ({n}).txt"); n += 1
+        return path
+
+    @staticmethod
+    def _session_label(path):
+        """'19 Oct, 01:45' from a transcript's file name (date only for files from older versions)"""
+        m = re.match(r"^(\d{4})-(\d\d)-(\d\d)(?:[_ ](\d\d)-(\d\d))?", os.path.basename(path))
+        if not m: return os.path.basename(path)
+        y, mo, d, hh, mm = m.groups()
+        day = datetime.date(int(y), int(mo), int(d)).strftime("%d %b").lstrip("0")
+        return f"{day}, {hh}:{mm}" if hh else day
+
+    def _ask_continue(self, path, mins):
+        ago = f"{int(round(mins))} minute{'s' if round(mins) != 1 else ''} ago"
+        box = QtWidgets.QMessageBox(self)
+        box.setWindowTitle("Continue the previous session?")
+        box.setText(f"Is this a continuation of the previous session from {self._session_label(path)}?")
+        box.setInformativeText(f"The app was last running {ago}. Yes keeps adding to that transcript; "
+                               f"No starts a new one.")
+        box.setStandardButtons(QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+        box.setDefaultButton(QtWidgets.QMessageBox.Yes)
+        return box.exec() == QtWidgets.QMessageBox.Yes
+
+    def toggle_keep(self, on):
+        """off: nothing more is written to files and the window only shows the last minute.
+        on again: a fresh file (the window only holds a minute, so the old file must not be overwritten)"""
+        if not on: self.save_session()
+        self.set("keep_transcript", on)
+        if on:
+            self.session_path = self._new_session_path(self.group_folder()); self._write_state(); self.save_session()
+        else:
+            self.session_path = None; self._trim_transcript()
+
+    def _trim_transcript(self):
+        if self.cfg.get("keep_transcript", True): return
+        limit = time.time() - float(self.cfg.get("transient_seconds", 60))
+        for i in range(self.tlist.count() - 1, -1, -1):
+            if self.tlist.item(i).data(Qt.UserRole).get("ts", 0) < limit: self.tlist.takeItem(i)
+
     def save_session_soon(self):
         if not hasattr(self, "_save_t"):
             self._save_t = QtCore.QTimer(self, singleShot=True, interval=800, timeout=self.save_session)
         self._save_t.start()
 
     def save_session(self):
-        if not getattr(self, "session_path", None) or self.tlist.count() == 0: return
+        if (not getattr(self, "session_path", None) or self.tlist.count() == 0
+                or not self.cfg.get("keep_transcript", True)): return
         rows = []
         for i in range(self.tlist.count()):
             d = self.tlist.item(i).data(Qt.UserRole)
@@ -1069,6 +1185,7 @@ class Panel(QtWidgets.QWidget):
                 if self.mic_worker.src: self.mic_worker.src.close()
             self.bank.save(force=True)
             self.save_session()
+            self._write_state()
         finally:
             QtWidgets.QApplication.quit()
 
@@ -1097,13 +1214,29 @@ class Transcript:
 
 
 # =============================================================================================== main
+def migrate_position(cfg):
+    """older versions placed the subtitles with left/centre/right + 'distance from side' + 'height from bottom';
+    turn that into the new X / Y pixel offsets (0, 0 = centred near the bottom) so nothing moves"""
+    old = [k for k in ("align", "overlay_bottom_px", "overlay_side_px") if k in cfg]
+    if not old: return
+    screens = QtGui.QGuiApplication.screens()
+    g = screens[min(max(int(cfg.get("screen", 0)), 0), len(screens) - 1)].geometry()
+    w = int(g.width() * cfg.get("overlay_width_pct", 75) / 100)
+    room = (g.width() - w) // 2 - int(cfg.get("overlay_side_px", 40))
+    al = cfg.get("align", "center")
+    cfg["overlay_x_px"] = -room if al == "left" else room if al == "right" else 0
+    cfg["overlay_y_px"] = BOTTOM_MARGIN - int(cfg.get("overlay_bottom_px", 90))
+    for k in old: cfg.pop(k, None)
+    log(f"[config] moved the old subtitle position to X {cfg['overlay_x_px']} px, Y {cfg['overlay_y_px']} px")
+
+
 def main():
     QtWidgets.QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QtWidgets.QApplication(sys.argv)
     app.setApplicationName("D&D Subtitles")
     ico = os.path.join(HERE, "app.ico")
     if os.path.exists(ico): app.setWindowIcon(QtGui.QIcon(ico))
-    cfg = engine.load_config(); engine.save_config(cfg)      # writes any new settings into config.json
+    cfg = engine.load_config(); migrate_position(cfg); engine.save_config(cfg)      # writes any new settings into config.json
     if "--snapshot" in sys.argv:              # demo voices, nothing saved
         import tempfile, numpy as np
         bank = engine.VoiceBank(path=os.path.join(tempfile.gettempdir(), "dndsubs_snapshot_voices.json"), model=cfg["voice_model"])
@@ -1128,22 +1261,6 @@ def main():
     bank.on_change = lambda k: bridge.voices_changed.emit(k)
     overlay = Overlay(cfg, bank); overlay.show()
     panel = Panel(cfg, bank, overlay, bridge); panel.show()
-    if not cfg.get("transcripts_merged_v1") and "--snapshot" not in sys.argv:
-        try:
-            cur = panel.group_folder()
-            groups = {re.sub(r'[<>:"/\\|?*]', "_", g).strip() for g in engine.list_groups()}
-            srcs = [os.path.join(TRANSCRIPTS, f) for f in os.listdir(TRANSCRIPTS) if f.startswith("session_")]
-            for d in os.listdir(TRANSCRIPTS):
-                p = os.path.join(TRANSCRIPTS, d)
-                if os.path.isdir(p) and d not in groups and d != "old sessions":     # folder of a renamed group
-                    srcs += [os.path.join(p, f) for f in os.listdir(p)]
-            if srcs: merge_transcripts(cur, srcs, TRANSCRIPTS)
-            for d in os.listdir(TRANSCRIPTS):
-                p = os.path.join(TRANSCRIPTS, d)
-                if os.path.isdir(p) and d not in groups and d != "old sessions" and not os.listdir(p): os.rmdir(p)
-            cfg["transcripts_merged_v1"] = True; engine.save_config(cfg)
-        except Exception as e:
-            log(f"[transcript] merge failed: {e}")
     panel.open_session()
 
     def on_event(e):

@@ -34,9 +34,12 @@ DEFAULT_CONFIG = {
     "max_lines": 3,
     "line_seconds": 9,
     "overlay_width_pct": 75,
-    "overlay_bottom_px": 90,
-    "align": "center",                 # left / center / right
-    "overlay_side_px": 40,             # gap from the screen edge when left/right
+    "overlay_x_px": 0,                 # 0 = centred on the screen; + moves right, - moves left
+    "overlay_y_px": 0,                 # 0 = near the bottom of the screen; + moves down, - moves up
+    "keep_transcript": True,           # False: nothing is written to files; the transcript window only shows the last minute
+    "transient_seconds": 60,           # how long lines stay in the window when "keep transcript" is off
+    "session_auto_resume_min": 5,      # closed for less than this: carry on in the same transcript automatically
+    "session_ask_resume_min": 60,      # closed for less than this (but longer than the above): ask; longer: new transcript
     "screen": 0,
     "background_opacity": 0.55,
     # voice matching (cosine similarity of voice fingerprints)
