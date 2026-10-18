@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 import engine
+import wordswap
 from engine import log
 
 # started without a CLI window (pythonw): status messages and errors go to app.log instead
@@ -595,11 +596,6 @@ class Panel(QtWidgets.QWidget):
         offset("Horizontal offset", "0 = centred. Negative moves left, positive moves right.", "overlay_x_px", geo.width() // 2, 4)
         offset("Vertical offset", "0 = near the bottom. Negative moves up, positive moves down.", "overlay_y_px", geo.height() // 2, 5)
 
-        g.addWidget(QtWidgets.QLabel("Words to expect"), 6, 0)
-        self.voc = QtWidgets.QLineEdit(cfg.get("vocabulary", ""))
-        self.voc.setPlaceholderText("Character names, places, spells… e.g. Thalindra, Neverwinter, Eldritch Blast")
-        self.voc.editingFinished.connect(lambda: self.set_group_value("vocabulary", self.voc.text().strip()))
-        g.addWidget(self.voc, 6, 1, 1, 3)
         g.addWidget(QtWidgets.QLabel("Background darkness"), 7, 0)
         bgs = QtWidgets.QSlider(Qt.Horizontal); bgs.setRange(0, 100)
         bgs.setValue(int(round(float(cfg.get("background_opacity", 0.55)) * 100)))
@@ -618,6 +614,37 @@ class Panel(QtWidgets.QWidget):
         g.addWidget(self.me_name, 8, 3)
         lay.addWidget(opt)
 
+        wf = QtWidgets.QGroupBox("Word fixing"); wl = QtWidgets.QGridLayout(wf)
+        def heading(t):
+            l = QtWidgets.QLabel(f"<b>{t}</b>"); return l
+        def hint(t):
+            l = QtWidgets.QLabel(t); l.setWordWrap(True); l.setStyleSheet("color:#888"); return l
+        self.lbl_manual = QtWidgets.QLabel(); self.lbl_manual.setStyleSheet("color:#888")
+        eb = QtWidgets.QPushButton("Edit…"); eb.clicked.connect(self.edit_word_fixes)
+        wl.addWidget(heading("Manual word swap (low impact)"), 0, 0); wl.addWidget(self.lbl_manual, 0, 1); wl.addWidget(eb, 0, 2)
+        wl.addWidget(hint("Always change one exact word or phrase into another, e.g. straw → Strahd. Runs first."), 1, 0, 1, 3)
+        self.lbl_auto = QtWidgets.QLabel(); self.lbl_auto.setStyleSheet("color:#888")
+        wl.addWidget(heading("Automatic word swap (medium impact)"), 2, 0); wl.addWidget(self.lbl_auto, 2, 1, 1, 2)
+        self.auto_edit = QtWidgets.QPlainTextEdit(); self.auto_edit.setFixedHeight(62)
+        self.auto_edit.setPlaceholderText("Names and terms, separated by commas or new lines. Anything that looks or sounds close "
+                                          "is changed into them, e.g. “bee holder” → Beholder.")
+        wl.addWidget(self.auto_edit, 3, 0, 1, 3)
+        wl.addWidget(hint("Fixes spellings and split words by itself. Ordinary words and short words are left alone, so long "
+                          "lists are fine."), 4, 0, 1, 3)
+        self.lbl_expect_h = QtWidgets.QLabel(); self.lbl_expect = QtWidgets.QLabel()
+        wl.addWidget(self.lbl_expect_h, 5, 0); wl.addWidget(self.lbl_expect, 5, 1, 1, 2)
+        self.voc = QtWidgets.QLineEdit()
+        self.voc.setPlaceholderText("The names and terms that matter most, e.g. Thalindra, Neverwinter")
+        wl.addWidget(self.voc, 6, 0, 1, 3)
+        self.lbl_expect_hint = hint(""); wl.addWidget(self.lbl_expect_hint, 7, 0, 1, 3)
+        wl.setColumnStretch(0, 1)
+        lay.addWidget(wf)
+        self.load_words_into_ui()
+        self.voc.textChanged.connect(lambda _: self.refresh_word_counts())
+        self.voc.editingFinished.connect(lambda: self.set_group_value("vocabulary", self.voc.text().strip()))
+        self._auto_t = QtCore.QTimer(self, singleShot=True, interval=700, timeout=self.save_auto_words)
+        self.auto_edit.textChanged.connect(lambda: (self.refresh_word_counts(), self._auto_t.start()))
+
         br = QtWidgets.QHBoxLayout()
         b = QtWidgets.QPushButton("Show test lines"); b.clicked.connect(self.overlay.demo); br.addWidget(b)
         self.cb_keep = QtWidgets.QCheckBox("Keep transcript")
@@ -625,8 +652,6 @@ class Panel(QtWidgets.QWidget):
         self.cb_keep.setChecked(cfg.get("keep_transcript", True)); self.cb_keep.toggled.connect(self.toggle_keep)
         br.addWidget(self.cb_keep)
         b = QtWidgets.QPushButton("Open transcripts folder"); b.clicked.connect(self.open_transcripts); br.addWidget(b)
-        b = QtWidgets.QPushButton("Word fixes…"); b.setToolTip("Always turn a misheard word into the right one (e.g. straw → Strahd)")
-        b.clicked.connect(self.edit_word_fixes); br.addWidget(b)
         br.addStretch(1)
         self.info = QtWidgets.QLabel(""); self.info.setStyleSheet("color:#888"); br.addWidget(self.info)
         lay.addLayout(br)
@@ -659,9 +684,35 @@ class Panel(QtWidgets.QWidget):
         self.bank.extra[key] = value; self.bank.save(force=True)
 
     def load_group_values(self):
+        migrate_words(self.bank)
         self.cfg["vocabulary"] = self.bank.extra.get("vocabulary", "")
         self.cfg["word_fixes"] = self.bank.extra.get("word_fixes", [])
-        if hasattr(self, "voc"): self.voc.setText(self.cfg["vocabulary"])
+        self.cfg["auto_words"] = self.bank.extra.get("auto_words", "")
+        if hasattr(self, "voc"): self.load_words_into_ui()
+
+    def load_words_into_ui(self):
+        for w, text in ((self.voc, self.cfg.get("vocabulary", "")), (self.auto_edit, self.cfg.get("auto_words", ""))):
+            w.blockSignals(True)
+            w.setText(text) if w is self.voc else w.setPlainText(text)
+            w.blockSignals(False)
+        self.refresh_word_counts()
+
+    def refresh_word_counts(self):
+        cap = int(self.cfg.get("expect_cap", 40))
+        n_fix = len(self.cfg.get("word_fixes") or [])
+        self.lbl_manual.setText(f"{n_fix} swap{'s' if n_fix != 1 else ''}")
+        n_auto = len(wordswap.parse_terms(self.auto_edit.toPlainText()))
+        self.lbl_auto.setText(f"{n_auto} word{'s' if n_auto != 1 else ''}")
+        n = len(wordswap.parse_terms(self.voc.text()))
+        self.lbl_expect_h.setText(f"<b>Words to expect (high impact, capped at {cap})</b>")
+        over = n > cap
+        self.lbl_expect.setText(f"{n} / {cap}" + (f" — only the first {cap} are used" if over else ""))
+        self.lbl_expect.setStyleSheet("color:#e5534b" if over else "color:#888")
+        self.lbl_expect_hint.setText(f"The strongest help: Whisper listens for these while it transcribes. Only about {cap} fit, "
+                                     f"so put the most important first.")
+
+    def save_auto_words(self):
+        self.set_group_value("auto_words", self.auto_edit.toPlainText().strip())
 
     def switch_group(self, name):
         if not name or name == self.cfg.get("group"): return
@@ -1133,11 +1184,10 @@ class Panel(QtWidgets.QWidget):
             log(f"[transcript] could not save: {e}")
 
     def edit_word_fixes(self):
-        dlg = QtWidgets.QDialog(self); dlg.setWindowTitle("Word fixes"); dlg.resize(460, 380)
+        dlg = QtWidgets.QDialog(self); dlg.setWindowTitle("Manual word swap"); dlg.resize(460, 380)
         v = QtWidgets.QVBoxLayout(dlg)
         v.addWidget(QtWidgets.QLabel("Whenever the left side is heard, the right side is written instead.\n"
-                                     "Whole words or phrases, any capitalisation. The right side is also given to "
-                                     "Whisper as a word to expect."))
+                                     "Whole words or phrases, any capitalisation."))
         tab = QtWidgets.QTableWidget(0, 2); tab.setHorizontalHeaderLabels(["Heard as", "Replace with"])
         tab.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
         for a, b in self.cfg.get("word_fixes") or []:
@@ -1161,7 +1211,7 @@ class Panel(QtWidgets.QWidget):
             a = (tab.item(r, 0).text() if tab.item(r, 0) else "").strip()
             b = (tab.item(r, 1).text() if tab.item(r, 1) else "").strip()
             if a and b: fixes.append([a, b])
-        self.set_group_value("word_fixes", fixes)
+        self.set_group_value("word_fixes", fixes); self.refresh_word_counts()
         for i in range(self.tlist.count()):                 # fix what's already in the transcript too
             it = self.tlist.item(i); d = it.data(Qt.UserRole)
             t = engine.apply_fixes(d["text"], fixes)
@@ -1183,6 +1233,7 @@ class Panel(QtWidgets.QWidget):
             if getattr(self, "mic_worker", None):
                 self.mic_worker.stop_flag = True
                 if self.mic_worker.src: self.mic_worker.src.close()
+            if self._auto_t.isActive(): self.save_auto_words()
             self.bank.save(force=True)
             self.save_session()
             self._write_state()
@@ -1214,6 +1265,19 @@ class Transcript:
 
 
 # =============================================================================================== main
+def migrate_words(bank):
+    """one time per group: the right-hand words of manual word swaps used to be sent to Whisper as words to expect.
+    That is now only done for the words you list under "Words to expect", so keep working the same by adding them there."""
+    if bank.extra.get("words_v2"): return
+    terms = wordswap.parse_terms(bank.extra.get("vocabulary", ""))
+    have = {t.lower() for t in terms}
+    for f in bank.extra.get("word_fixes") or []:
+        if len(f) > 1 and f[1].strip() and f[1].strip().lower() not in have:
+            terms.append(f[1].strip()); have.add(f[1].strip().lower())
+    bank.extra["vocabulary"] = ", ".join(terms); bank.extra["words_v2"] = True
+    bank.save(force=True)
+
+
 def migrate_position(cfg):
     """older versions placed the subtitles with left/centre/right + 'distance from side' + 'height from bottom';
     turn that into the new X / Y pixel offsets (0, 0 = centred near the bottom) so nothing moves"""
@@ -1256,7 +1320,9 @@ def main():
         if "vocabulary" not in bank.extra and "word_fixes" not in bank.extra:     # lists used to be shared
             bank.extra = {"vocabulary": cfg.get("vocabulary", ""), "word_fixes": cfg.get("word_fixes", [])}
             bank.save(force=True)
+        migrate_words(bank)
         cfg["vocabulary"] = bank.extra.get("vocabulary", ""); cfg["word_fixes"] = bank.extra.get("word_fixes", [])
+        cfg["auto_words"] = bank.extra.get("auto_words", "")
     bridge = Bridge()
     bank.on_change = lambda k: bridge.voices_changed.emit(k)
     overlay = Overlay(cfg, bank); overlay.show()

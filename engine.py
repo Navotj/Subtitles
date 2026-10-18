@@ -4,6 +4,7 @@ No UI code here, so it can be tested on its own (selftest.py).
 """
 import os, sys, json, time, threading, queue, re, datetime, glob
 import numpy as np
+import wordswap
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GROUPS = os.path.join(HERE, "groups")
@@ -26,7 +27,9 @@ DEFAULT_CONFIG = {
     "audio_device": "auto",            # "auto" = NVIDIA Broadcast speakers if present, else Windows default output
     "whisper_model": "large-v3-turbo",
     "language": "en",
-    "vocabulary": "",                  # names and words Whisper should expect, e.g. "Thalindra, Neverwinter, Eldritch Blast"
+    "vocabulary": "",                  # "words to expect" (high impact): names Whisper listens for; only the first expect_cap are used
+    "expect_cap": 40,                  # how many of them fit (Whisper only takes roughly 220 tokens of hints)
+    "auto_words": "",                  # "automatic word swap" (medium impact): known terms that similar-sounding words are changed into
     "show_partial": True,              # show text while someone is still talking
     # new voices are only ever added by you (right-click a "?" line); "auto_new_voices" is for the self-tests only
     "max_voices": 8,
@@ -165,7 +168,7 @@ class VoiceBank:
             if d.get("me_version") == 3 and not os.path.exists(MY_VOICE):   # (older files kept you in here)
                 self.me = [np.asarray(p, dtype=np.float32) for p in d.get("me", [])]
                 self.me_counts = d.get("me_counts", [1] * len(self.me))
-            self.extra = {k: d[k] for k in ("vocabulary", "word_fixes") if k in d}
+            self.extra = {k: d[k] for k in ("vocabulary", "word_fixes", "auto_words", "words_v2") if k in d}
             for v in d.get("voices", []):
                 if "protos" in v:
                     v["protos"] = [np.asarray(p, dtype=np.float32) for p in v["protos"]]
@@ -375,12 +378,8 @@ class Transcriber:
         log(f"[whisper] {self.name} ready on {self.device.upper()}")
 
     def vocab_terms(self):
-        seen, out = set(), []
-        fix_words = [f[1] for f in (self.cfg.get("word_fixes") or []) if len(f) > 1 and f[1].strip()]
-        for t in re.split(r"[,;\n]+", self.cfg.get("vocabulary") or "") + fix_words:
-            t = t.strip()
-            if t and t.lower() not in seen: seen.add(t.lower()); out.append(t)
-        return out
+        """the "words to expect" list (only this list goes to Whisper), cut to the first expect_cap"""
+        return wordswap.parse_terms(self.cfg.get("vocabulary") or "")[:int(self.cfg.get("expect_cap", 40))]
 
     def _opts(self, vocab=False):
         terms = self.vocab_terms() if vocab else []
@@ -551,10 +550,11 @@ class Pipeline:
     def __init__(self, cfg, bank, asr, emb, on_event):
         self.cfg, self.bank, self.asr, self.emb = cfg, bank, asr, emb
         def emit(ev):
-            fx = self.cfg.get("word_fixes") or []
-            if fx:
-                if "text" in ev: ev = {**ev, "text": apply_fixes(ev["text"], fx)}
-                if "parts" in ev: ev = {**ev, "parts": [(v, apply_fixes(t, fx)) for v, t in ev["parts"]]}
+            fx, aw = self.cfg.get("word_fixes") or [], self.cfg.get("auto_words") or ""
+            if fx or aw:                                  # manual swaps first, then the automatic ones
+                fix = lambda t: wordswap.apply_auto(apply_fixes(t, fx), aw)
+                if "text" in ev: ev = {**ev, "text": fix(ev["text"])}
+                if "parts" in ev: ev = {**ev, "parts": [(v, fix(t)) for v, t in ev["parts"]]}
             on_event({**ev, "source": self.source})
         self.on_event = emit
         self.seg = Segmenter(cfg.get("max_segment_seconds", 10))

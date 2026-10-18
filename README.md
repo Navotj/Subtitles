@@ -31,7 +31,10 @@ Start it from the desktop icon (no console window; messages go to `app.log`). Cl
 - **Your own voice:** your mic is added to the transcript only, never to the subtitles. It is labelled with your Windows user name; change it under **My name**. Echo of the call that your mic picks up is recognised and ignored. Use **Relearn my voice** if your lines look wrong.
 - **Transcripts:** saved in `transcripts\<group>\<date>_<time>.txt` (for example `2026-10-19_01-45.txt`). If you reopen the app within 5 minutes it carries on in the same file. Between 5 minutes and an hour it asks "Is this a continuation of the previous session from …?". After an hour it starts a new file. Fixes and renames are written into the file too. Select lines with Ctrl or Shift-click and copy them with right-click or Ctrl+C. "Natural 20" is highlighted.
 - **Keep transcript:** untick it and nothing is written to a file; the transcript window only shows the last minute.
-- **Word fixes…:** always replace a misheard word, for example *straw → Strahd*. The right-hand words are also given to Whisper as words to expect. Words to expect and word fixes are saved per group.
+- **Word fixing** (three lists, saved per group, from lowest to highest impact):
+  - **Manual word swap (low impact):** always change one exact heard word or phrase into another, for example *straw → Strahd*. Runs first.
+  - **Automatic word swap (medium impact):** a list of names and terms. Anything that looks or sounds close is changed into them by itself (*bee holder → Beholder*, *fire ball → Fireball*). Ordinary and very short words are left alone, and long lists are fine.
+  - **Words to expect (high impact, capped at 40):** names Whisper listens for while it transcribes. The strongest help, but only about 40 fit, so put the most important first.
 - **Display:** text size and width, number of lines, how long lines stay, screen, background darkness, and position. Position is two sliders in pixels, **Horizontal offset** and **Vertical offset**, which you can also type into; 0 and 0 is centred near the bottom, negative moves left/up, positive moves right/down. The window stays click-through over games; use borderless or windowed mode.
 
 ## How it works (short)
@@ -44,6 +47,7 @@ Start it from the desktop icon (no console window; messages go to `app.log`). Cl
 | file | what |
 |---|---|
 | `app.py` | windows: subtitle overlay, control window, transcript |
+| `wordswap.py` | the automatic word swap (`python tools\\test_wordswap.py` checks it) |
 | `engine.py` | audio capture, speech detection, Whisper, voice matching, echo filter |
 | `install.bat` / `install.ps1` | setup |
 | `Subtitles.bat` | start without the desktop icon |
