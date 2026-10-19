@@ -7,7 +7,7 @@ No Qt in here, so the installer and the tests can use it too.
 import os, sys, json, glob, shutil, subprocess, threading, time, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-MODELS = os.path.join(HERE, "models")
+MODELS = os.environ.get("SUBTITLES_MODELS_DIR") or os.path.join(HERE, "models")
 SHERPA = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/"
 
 # Speech to text (Whisper, run by faster-whisper). langs: "en" = English only, "all" = every language Whisper knows.

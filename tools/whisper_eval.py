@@ -24,7 +24,7 @@ from collections import Counter, defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-EVAL = os.path.join(ROOT, "eval")
+EVAL = os.environ.get("SUBTITLES_EVAL_DIR") or os.path.join(ROOT, "eval")
 PAD = 0.3                    # seconds of slack around each caption when picking the words Whisper produced for it
 
 
@@ -260,7 +260,7 @@ def transcribe(media, cfg, gpu_percent=80, minutes=None):
     x = np.asarray(x, dtype=np.float32)
     if minutes: x = x[:int(minutes * 60 * SR)]
     dur = len(x) / SR
-    asr = engine.Transcriber(cfg)
+    t_load = time.time(); asr = engine.Transcriber(cfg); t_load = time.time() - t_load
     seg = engine.Segmenter(cfg.get("max_segment_seconds", 10))
     utts, step = [], int(0.03 * SR)
     for i in range(0, len(x), step):
@@ -269,23 +269,36 @@ def transcribe(media, cfg, gpu_percent=80, minutes=None):
     u = seg.flush()
     if u: utts.append(u)
     words, t_all, done = [], time.time(), 0.0
+    fin, part, n_u = [], [], 0                        # seconds Whisper needed: per finished utterance / per live preview
     for t0, a in utts:
         if len(a) < 0.35 * SR: continue
         t = time.time()
         for s, e, w in asr.final(a): words.append((t0 / SR + s, t0 / SR + e, w))
         el = time.time() - t
+        fin.append((el, len(a) / SR)); n_u += 1
+        if n_u % 4 == 0:                              # what the live preview costs: the first 2.5 s of an utterance
+            tp = time.time(); asr.partial(a[:int(2.5 * SR)]); part.append(time.time() - tp)
         if gpu_percent < 100 and asr.device == "cuda":
             time.sleep(el * (100 - gpu_percent) / max(gpu_percent, 1))        # busy about gpu_percent of the time
         done = (t0 + len(a)) / SR
         if int(done) // 30 != int(done - len(a) / SR) // 30:
             print(f"  {done / 60:5.1f} / {dur / 60:.1f} min  ({time.time() - t_all:.0f} s)", flush=True)
+    import statistics
+    def q(v, p): v = sorted(v); return v[min(len(v) - 1, int(p * len(v)))] if v else 0.0
+    work = sum(e for e, _ in fin)
     info = dict(model=asr.name, device=asr.device.upper(), minutes=round(dur / 60, 1),
-                seconds_used=round(time.time() - t_all), leaks=getattr(asr, "leaks", 0))
+                seconds_used=round(time.time() - t_all), leaks=getattr(asr, "leaks", 0),
+                load_s=round(t_load, 1), speech_s=round(sum(d for _, d in fin), 1), work_s=round(work, 1),
+                final_ms_med=round(1000 * statistics.median([e for e, _ in fin] or [0])),
+                final_ms_p90=round(1000 * q([e for e, _ in fin], 0.9)),
+                final_x_realtime=round(sum(d for _, d in fin) / max(work, 1e-9), 1),
+                partial_ms_med=round(1000 * statistics.median(part or [0])), partial_ms_p90=round(1000 * q(part, 0.9)),
+                utterances=len(fin))
     return words, info
 
 
 def run(media, captions, name=None, expect="", auto="", fixes=None, terms=None, gpu=80, minutes=None, reuse=False,
-        title=None):
+        title=None, model=None, cpu=False):
     name = name or os.path.splitext(os.path.basename(media))[0]
     for d in ("work", "reports"): os.makedirs(os.path.join(EVAL, d), exist_ok=True)
     cues = parse_captions(open(captions, encoding="utf-8", errors="replace").read())
@@ -300,6 +313,8 @@ def run(media, captions, name=None, expect="", auto="", fixes=None, terms=None, 
     if words is None:
         import engine
         cfg = engine.load_config(); cfg["vocabulary"] = expect; cfg["word_fixes"] = []
+        if model: cfg["whisper_model"] = model
+        if cpu: cfg["whisper_device"] = "cpu"
         print(f"transcribing {os.path.basename(media)} ...", flush=True)
         words, info = transcribe(media, cfg, gpu, minutes)
         json.dump(dict(expect=expect, minutes_limit=minutes, words=words, info=info), open(cache, "w", encoding="utf-8"))
@@ -321,8 +336,16 @@ def run(media, captions, name=None, expect="", auto="", fixes=None, terms=None, 
     n_exp = len([t for t in re.split(r"[,;\n]+", expect) if t.strip()])
     line = (f"{info['minutes']} min on {info['device']} ({info['model']}); words to expect: {n_exp or 'none'}; "
             f"swaps afterwards: {', '.join(steps) or 'none'}"
-            + (f"; the list was repeated back instead of speech {info['leaks']} times" if info.get("leaks") else ""))
+            + (f"; the list was repeated back instead of speech {info['leaks']} times" if info.get("leaks") else "")
+            + (f"\n- speed: a finished sentence takes {info['final_ms_med']} ms (slowest tenth {info['final_ms_p90']} ms) to transcribe, "
+               f"{info['final_x_realtime']}x faster than real time; the live preview takes {info['partial_ms_med']} ms "
+               f"(slowest tenth {info['partial_ms_p90']} ms); loading the model took {info['load_s']} s"
+               if "final_ms_med" in info else ""))
     rep = build_report(title or name, line, r)
+    tot, okt = sum(r["term_n"].values()), sum(r["term_ok"].values())
+    json.dump(dict(name=name, model=info.get("model"), device=info.get("device"), wer=round(100 * r["errors"] / max(r["n_ref"], 1), 2),
+                   n_ref=r["n_ref"], terms_ok=okt, terms_n=tot, info=info),
+              open(os.path.join(EVAL, "work", name + ".metrics.json"), "w", encoding="utf-8"))
     path = os.path.join(EVAL, "reports", f"{name}_{datetime.datetime.now():%Y-%m-%d_%H-%M-%S}.md")
     open(path, "w", encoding="utf-8").write(rep)
     print("\n" + "\n".join(rep.split("\n")[:34]))
@@ -336,11 +359,13 @@ def main(argv=None):
     ap.add_argument("--expect"); ap.add_argument("--auto"); ap.add_argument("--fixes"); ap.add_argument("--terms")
     ap.add_argument("--gpu", type=int, default=80); ap.add_argument("--minutes", type=float)
     ap.add_argument("--reuse", action="store_true"); ap.add_argument("--name")
+    ap.add_argument("--model", help="Whisper model to use (see models.py), default: the one in config.json")
+    ap.add_argument("--cpu", action="store_true", help="run on the processor, not the graphics card")
     a = ap.parse_args(argv)
     fixes = json.load(open(a.fixes, encoding="utf-8")) if a.fixes else None
     terms = [t.strip() for t in re.split(r"[,;\n]+", read_list(a.terms)) if t.strip()] if a.terms else None
     run(a.media, a.captions, a.name, read_list(a.expect).strip(), read_list(a.auto).strip(), fixes, terms,
-        a.gpu, a.minutes, a.reuse)
+        a.gpu, a.minutes, a.reuse, model=a.model, cpu=a.cpu)
 
 
 if __name__ == "__main__":

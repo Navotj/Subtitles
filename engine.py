@@ -18,7 +18,7 @@ def group_path(name):
 def list_groups():
     os.makedirs(GROUPS, exist_ok=True)
     return sorted(os.path.splitext(f)[0] for f in os.listdir(GROUPS) if f.endswith(".json"))
-MODELS = os.path.join(HERE, "models")
+MODELS = os.environ.get("SUBTITLES_MODELS_DIR") or os.path.join(HERE, "models")
 SR = 16000
 FRAME = 512                     # 32 ms, what Silero VAD wants
 
@@ -377,12 +377,14 @@ class Transcriber:
             name = models.recommended_speech(models.detect_gpu(), langs)
             log(f"[whisper] {cfg.get('whisper_model')} cannot do {langs}; using {name}")
         try:
+            if cfg.get("whisper_device") == "cpu": raise RuntimeError("processor requested")
             if not models.speech_installed(name): models.download_speech(name)
             self.model = WhisperModel(name, device="cuda", compute_type="float16", download_root=MODELS)
             list(self.model.transcribe(np.zeros(SR, dtype=np.float32), language=langs[0] if len(langs) == 1 else None,
                                        beam_size=1)[0])                       # warm-up; fails here if CUDA is broken
         except Exception as e:
-            name = "small.en" if langs == ["en"] else "small"
+            if cfg.get("whisper_device") != "cpu" or (spec and spec["gpu"]):
+                name = "small.en" if langs == ["en"] else "small"
             log(f"[whisper] GPU failed ({e}); using the '{name}' model on the processor (slower, less accurate)")
             self.device = "cpu"
             if not models.speech_installed(name): models.download_speech(name)
