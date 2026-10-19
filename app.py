@@ -528,7 +528,10 @@ class Panel(QtWidgets.QWidget):
                           "otherwise the Windows default. The list refreshes each time you open it.")
         self.dev.about_to_show.connect(self.fill_devices); row.addWidget(self.dev, 1)
         row.addSpacing(16)
-        row.addWidget(QtWidgets.QLabel("My mic:"))
+        self.cb_me = QtWidgets.QCheckBox("My mic:")
+        self.cb_me.setToolTip("Add your own voice to the transcript. Untick it when you only listen (a film, a stream, a recording) "
+                              "and there is nobody on your side to record.")
+        self.cb_me.setChecked(cfg.get("my_voice", True)); row.addWidget(self.cb_me)
         self.mic_dev = RescanCombo(); self.mic_dev.setMinimumWidth(260)
         self.mic_dev.setToolTip("Your own microphone (added to the transcript only). Automatic picks the NVIDIA Broadcast mic if you have one, "
                               "otherwise the Windows default. The list refreshes each time you open it.")
@@ -605,10 +608,8 @@ class Panel(QtWidgets.QWidget):
         bgs.valueChanged.connect(bg_changed)
         bgs.sliderReleased.connect(self.overlay.demo)
         g.addWidget(bgs, 7, 1, 1, 2); g.addWidget(bgl, 7, 3)
-        self.cb_me = QtWidgets.QCheckBox("Add my voice to the transcript")
-        self.cb_me.setChecked(cfg.get("my_voice", True)); self.cb_me.toggled.connect(self.toggle_mic)
-        g.addWidget(self.cb_me, 8, 0, 1, 2)
-        g.addWidget(QtWidgets.QLabel("My name"), 8, 2)
+        self.me_name_label = QtWidgets.QLabel("My name")
+        g.addWidget(self.me_name_label, 8, 2)
         self.me_name = QtWidgets.QLineEdit(cfg.get("my_name", "Me"))
         self.me_name.editingFinished.connect(lambda: self.set_my_name(self.me_name.text()))
         g.addWidget(self.me_name, 8, 3)
@@ -662,6 +663,7 @@ class Panel(QtWidgets.QWidget):
         self.fill_devices(initial=True)
         self.fill_mics()
         self.mic_dev.currentIndexChanged.connect(self.change_mic)
+        self.cb_me.toggled.connect(self.toggle_mic); self.show_my_mic(cfg.get("my_voice", True))
         self.rebuild()
         self.meter_t = QtCore.QTimer(self, interval=120, timeout=self.update_meter); self.meter_t.start()
         self.save_t = QtCore.QTimer(self, interval=5000, timeout=lambda: self.bank.save()); self.save_t.start()
@@ -825,8 +827,14 @@ class Panel(QtWidgets.QWidget):
         if getattr(self, "mic_worker", None): self.mic_worker.set_source(None)
         self.mic_status.setText("")
 
+    def show_my_mic(self, on):
+        """with "My mic" off, nothing about you is shown: no mic picker, no name box, no row in the voice list"""
+        for w in (self.mic_dev, self.mic_status, self.me_name, self.me_name_label): w.setVisible(on)
+        for w in (getattr(self, "my_row_widgets", None) or []): w.setVisible(on)
+
     def toggle_mic(self, on):
         self.set("my_voice", on)
+        self.show_my_mic(on)
         self.start_mic() if on else self.stop_mic()
 
     def change_mic(self, *_):
@@ -988,6 +996,8 @@ class Panel(QtWidgets.QWidget):
         self.grid.addWidget(mcol, 1, 0); self.grid.addWidget(mname, 1, 1); self.grid.addWidget(mnote, 1, 2, 1, 2)
         self.grid.addWidget(relearn, 1, 5, 1, 2)
         self.my_row = dict(col=mcol, name=mname)
+        self.my_row_widgets = [mcol, mname, mnote, relearn]
+        for w in self.my_row_widgets: w.setVisible(bool(self.cfg.get("my_voice", True)))
         for r, v in enumerate(snap, start=2):
             vid = v["id"]
             col = QtWidgets.QPushButton(); col.setFixedSize(28, 22)
