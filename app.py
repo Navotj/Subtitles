@@ -690,13 +690,13 @@ class Panel(QtWidgets.QWidget):
         self.lbl_manual = QtWidgets.QLabel(); self.lbl_manual.setStyleSheet("color:#888")
         eb = QtWidgets.QPushButton("Edit…"); eb.clicked.connect(self.edit_word_fixes)
         wl.addWidget(heading("Manual word swap (low impact)"), 0, 0); wl.addWidget(self.lbl_manual, 0, 1); wl.addWidget(eb, 0, 2)
-        wl.addWidget(hint("Always change one exact word or phrase into another, e.g. straw → Strahd. Runs first."), 1, 0, 1, 3)
+        wl.addWidget(hint("You choose both sides: whenever the app writes the first word or phrase, replace it with the second, every time. e.g. straw → Strahd."), 1, 0, 1, 3)
         self.lbl_auto = QtWidgets.QLabel(); self.lbl_auto.setStyleSheet("color:#888")
         wl.addWidget(heading("Automatic word swap (medium impact)"), 2, 0); wl.addWidget(self.lbl_auto, 2, 1, 1, 2)
         self.auto_edit = QtWidgets.QPlainTextEdit(); self.auto_edit.setFixedHeight(62)
-        self.auto_edit.setPlaceholderText("Only the correct words, e.g.  Strahd, Waterdeep, Beholder")
+        self.auto_edit.setPlaceholderText("Type the correct spellings, e.g.  Strahd, Waterdeep, Beholder")
         wl.addWidget(self.auto_edit, 3, 0, 1, 3)
-        wl.addWidget(hint("Just the correct word. The app finds the wrong versions itself: “bee holder” → Beholder."), 4, 0, 1, 3)
+        wl.addWidget(hint("Turns close guesses into the word you list. Type only the correct spelling; anything the app wrote that looks or sounds almost like it is replaced, e.g. “bee holder” → Beholder."), 4, 0, 1, 3)
         self.lbl_expect_h = QtWidgets.QLabel(); self.lbl_expect = QtWidgets.QLabel()
         wl.addWidget(self.lbl_expect_h, 5, 0); wl.addWidget(self.lbl_expect, 5, 1, 1, 2)
         self.voc = QtWidgets.QLineEdit()
@@ -788,8 +788,8 @@ class Panel(QtWidgets.QWidget):
         over = n > cap
         self.lbl_expect.setText(f"{n} / {cap}" + (f" — only the first {cap} are used" if over else ""))
         self.lbl_expect.setStyleSheet("color:#e5534b" if over else "color:#888")
-        self.lbl_expect_hint.setText(f"The strongest help: Whisper listens for these while it transcribes. Only about {cap} fit, "
-                                     f"so put the most important first.")
+        self.lbl_expect_hint.setText(f"Tells the speech recognition these words before it listens, so it hears them right the first time. "
+                                     f"Only about {cap} fit, so put the most important first.")
 
     def save_auto_words(self):
         self.set_group_value("auto_words", self.auto_edit.toPlainText().strip())
