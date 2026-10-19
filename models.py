@@ -69,7 +69,8 @@ def supports(model, languages):
 # ------------------------------------------------------------------------------------------ files on disk
 def speech_dirs(id):
     """the Whisper download folder(s) for a model, e.g. models/models--Systran--faster-whisper-small"""
-    return [d for d in glob.glob(os.path.join(MODELS, "models--*--*faster-whisper-" + id)) if os.path.isdir(d)]
+    pat = "*faster-distil-whisper-" + id[len("distil-"):] if id.startswith("distil-") else "*faster-whisper-" + id
+    return [d for d in glob.glob(os.path.join(MODELS, "models--*--" + pat)) if os.path.isdir(d)]
 
 
 def speech_installed(id):
