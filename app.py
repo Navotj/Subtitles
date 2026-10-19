@@ -2,7 +2,7 @@
 D&D Subtitles - live subtitles for Discord calls, coloured by who is talking.
 Run Subtitles.bat. Close the "D&D Subtitles" window to quit.
 """
-import sys, os, re, json, time, threading, datetime, html, traceback, subprocess
+import sys, os, re, json, random, time, threading, datetime, html, traceback, subprocess
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import Qt
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -299,6 +299,69 @@ class Overlay(QtWidgets.QWidget):
         for i, v in enumerate(snap[:6]):
             self.on_event({"kind": "final", "utt": -1 - i, "parts": [(v["id"], samples[i % len(samples)])]})
 
+    # ---- test run: made-up conversation on the overlay only (nothing reaches the transcript or the voice list)
+    TEST_PEOPLE = [("Alex", "#7FD1FF"), ("Sam", "#FFB86B"), ("Jordan", "#9BE37D")]
+    TEST_SHORT = ["Okay.", "Yeah, sure.", "Wait, really?", "That works for me.", "Sounds good.", "I think so, yes.",
+                  "No way.", "Let's do it.", "Hold on a second.", "Right, makes sense."]
+    TEST_MEDIUM = ["I'm not sure that is going to work, but we can try it again tomorrow morning.",
+                   "Did anyone actually read the message that came in last night about the schedule?",
+                   "Honestly, I would rather finish this part first and then look at the rest together.",
+                   "That was a lot louder than I expected, so I turned the volume down a bit."]
+    TEST_LONG = ["So what happened was, we waited for almost an hour, and then somebody finally came out and told us "
+                 "the whole thing had been moved to the other building, which nobody had thought to mention. After that "
+                 "we walked across the square in the rain, found the right door, and of course it was locked.",
+                 "The way I see it, there are really two options here. We can keep going the way we have been, which is "
+                 "slow but safe, or we can split up, cover twice as much ground, and meet again at the end of the day "
+                 "to compare notes, as long as everybody remembers to check in on time."]
+
+    def start_test(self):
+        self._test_on = True; self._test_u = None; self._test_wait = 0; self._test_n = getattr(self, "_test_n", 0)
+        snap = self.bank.snapshot()[:3]
+        self._test_ppl = [v["id"] for v in snap] + [f"test:{i}" for i in range(len(snap), 3)]
+        self._test_names = {f"test:{i}": self.TEST_PEOPLE[i] for i in range(3)}
+        if not hasattr(self, "_test_timer"):
+            self._test_timer = QtCore.QTimer(self, interval=230, timeout=self._test_step)
+        self._test_timer.start()
+
+    def stop_test(self):
+        self._test_on = False
+        if hasattr(self, "_test_timer"): self._test_timer.stop()
+
+    def test_names(self, v):
+        """(name, colour) for a made-up test voice, or None for a real one"""
+        return getattr(self, "_test_names", {}).get(v)
+
+    def _test_scene(self):
+        """-> [(voice, text)]: one line, a quick back-and-forth, one person with several lines, or a long speech"""
+        r = random.random(); a, b, c = random.sample(self._test_ppl, 3)
+        if r < 0.22: return [(a, random.choice(self.TEST_SHORT))]
+        if r < 0.42: return [(a, random.choice(self.TEST_MEDIUM))]
+        if r < 0.60: return [(a, random.choice(self.TEST_SHORT)), (b, random.choice(self.TEST_SHORT)),
+                             (a, random.choice(self.TEST_MEDIUM))]
+        if r < 0.75: return [(a, random.choice(self.TEST_MEDIUM)), (a, random.choice(self.TEST_SHORT)),
+                             (b, random.choice(self.TEST_SHORT))]
+        if r < 0.90: return [(a, random.choice(self.TEST_LONG))]
+        return [(a, random.choice(self.TEST_LONG)), (b, random.choice(self.TEST_SHORT)), (c, random.choice(self.TEST_MEDIUM))]
+
+    def _test_step(self):
+        if not getattr(self, "_test_on", False): return
+        if self._test_wait > 0: self._test_wait -= 1; return
+        if self._test_u is None:
+            if not getattr(self, "_test_queue", None): self._test_queue = self._test_scene()
+            v, text = self._test_queue.pop(0)
+            self._test_n += 1
+            self._test_u = dict(utt=-1000 - self._test_n, voice=v, words=text.split(), k=0, new=True)
+        u = self._test_u
+        u["k"] = min(len(u["words"]), u["k"] + random.randint(1, 3))
+        txt = " ".join(u["words"][:u["k"]])
+        if u["k"] < len(u["words"]):
+            self.on_event({"kind": "partial", "utt": u["utt"], "voice": u["voice"], "text": txt, "new_speaker": u["new"]})
+            u["new"] = False
+        else:
+            self.on_event({"kind": "final", "utt": u["utt"], "parts": [(u["voice"], txt)]})
+            self._test_u = None
+            self._test_wait = random.choice([0, 1, 1, 2, 3, 6, 12]) if not self._test_queue else random.choice([0, 1, 2])
+
     # ---- layout
     def _metrics(self):
         fs = int(self.cfg.get("font_size", 32))
@@ -321,7 +384,7 @@ class Overlay(QtWidgets.QWidget):
     def _rows(self, group, font, width):
         """-> name, colour, name width, [(row html, row plain text)] for one person's box"""
         v, ls = group
-        name, color = self.bank.get(v) if v is not None else ("?", engine.UNKNOWN_COLOR)
+        name, color = (self.test_names(v) or self.bank.get(v)) if v is not None else ("?", engine.UNKNOWN_COLOR)
         fm = QtGui.QFontMetricsF(font); bold = QtGui.QFont(font); bold.setBold(True)
         nw = QtGui.QFontMetricsF(bold).horizontalAdvance(name + ": ")
         maxc = max(20, int((width - nw) / (fm.averageCharWidth() * 1.08)))     # what fits on one row of the box
@@ -648,6 +711,10 @@ class Panel(QtWidgets.QWidget):
 
         br = QtWidgets.QHBoxLayout()
         b = QtWidgets.QPushButton("Show test lines"); b.clicked.connect(self.overlay.demo); br.addWidget(b)
+        self.btn_test = QtWidgets.QPushButton("Play a test run"); self.btn_test.setCheckable(True)
+        self.btn_test.setToolTip("Plays a made-up conversation on the subtitles (short replies, back-and-forth, long speeches) "
+                                 "so you can set the size, width, position and darkness. Nothing is saved to the transcript.")
+        self.btn_test.toggled.connect(self.toggle_test_run); br.addWidget(self.btn_test)
         self.cb_keep = QtWidgets.QCheckBox("Keep transcript")
         self.cb_keep.setToolTip("Off: nothing is saved to a file, and the transcript only shows the last minute.")
         self.cb_keep.setChecked(cfg.get("keep_transcript", True)); self.cb_keep.toggled.connect(self.toggle_keep)
@@ -826,6 +893,10 @@ class Panel(QtWidgets.QWidget):
     def stop_mic(self):
         if getattr(self, "mic_worker", None): self.mic_worker.set_source(None)
         self.mic_status.setText("")
+
+    def toggle_test_run(self, on):
+        self.btn_test.setText("Stop test run" if on else "Play a test run")
+        self.overlay.start_test() if on else self.overlay.stop_test()
 
     def show_my_mic(self, on):
         """with "My mic" off, nothing about you is shown: no mic picker, no name box, no row in the voice list"""
