@@ -108,6 +108,28 @@ def toks(text):
     return out
 
 
+def names_from_captions(cues, top=40):
+    """Names the captioner wrote with a capital letter in the middle of sentences, most used first. This is what a DM who
+    knows the cast, places and gods could type in, so it is the best case for "words to expect"."""
+    mid, low = Counter(), Counter()
+    prev_end = True
+    for _, _, t in cues:
+        for tok in t.split():
+            core = re.sub(r"^[^A-Za-z]+|[^A-Za-z']+$", "", tok.replace("’", "'"))
+            core = re.sub(r"'s$", "", core)
+            initial, prev_end = prev_end, bool(re.search(r"[.?!…—]$|--$", tok.rstrip("\"”)'")))
+            if len(core) < 3 or core.isupper(): continue
+            if core[0].isupper():
+                if not initial: mid[core] += 1
+            else:
+                low[core] += 1
+    stop = {"god", "mister", "missus", "doctor", "okay", "yes", "dungeon", "master", "dimension", "asian", "yell", "bad",
+            "kids", "red", "waste", "manor", "fantasy", "faithful", "intrepid", "society", "academy", "adventuring",
+            "oracle", "solace", "hangman", "doggy", "froggy", "boggy", "van"}
+    names = [w for w, c in mid.most_common() if c >= 2 and "'" not in w and low[w.lower()] == 0 and w.lower() not in stop]
+    return names[:top]
+
+
 # ------------------------------------------------------------------------------------------------ comparing
 def _trivial(a, b):
     """differences that are not worth reporting: plurals and apostrophes (a split word like "fire ball" IS worth reporting)"""
@@ -258,7 +280,7 @@ def transcribe(media, cfg, gpu_percent=80, minutes=None):
         if int(done) // 30 != int(done - len(a) / SR) // 30:
             print(f"  {done / 60:5.1f} / {dur / 60:.1f} min  ({time.time() - t_all:.0f} s)", flush=True)
     info = dict(model=asr.name, device=asr.device.upper(), minutes=round(dur / 60, 1),
-                seconds_used=round(time.time() - t_all))
+                seconds_used=round(time.time() - t_all), leaks=getattr(asr, "leaks", 0))
     return words, info
 
 
@@ -298,7 +320,8 @@ def run(media, captions, name=None, expect="", auto="", fixes=None, terms=None, 
     r = align(cues, words, terms, post)
     n_exp = len([t for t in re.split(r"[,;\n]+", expect) if t.strip()])
     line = (f"{info['minutes']} min on {info['device']} ({info['model']}); words to expect: {n_exp or 'none'}; "
-            f"swaps afterwards: {', '.join(steps) or 'none'}")
+            f"swaps afterwards: {', '.join(steps) or 'none'}"
+            + (f"; the list was repeated back instead of speech {info['leaks']} times" if info.get("leaks") else ""))
     rep = build_report(title or name, line, r)
     path = os.path.join(EVAL, "reports", f"{name}_{datetime.datetime.now():%Y-%m-%d_%H-%M-%S}.md")
     open(path, "w", encoding="utf-8").write(rep)
