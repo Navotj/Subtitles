@@ -694,11 +694,11 @@ class Panel(QtWidgets.QWidget):
         self.lbl_auto = QtWidgets.QLabel(); self.lbl_auto.setStyleSheet("color:#888")
         wl.addWidget(heading("Automatic word swap (medium impact)"), 2, 0); wl.addWidget(self.lbl_auto, 2, 1, 1, 2)
         self.auto_edit = QtWidgets.QPlainTextEdit(); self.auto_edit.setFixedHeight(62)
-        self.auto_edit.setPlaceholderText("Names and terms, separated by commas or new lines. Anything that looks or sounds close "
-                                          "is changed into them, e.g. “bee holder” → Beholder.")
+        self.auto_edit.setPlaceholderText("Example (one per line, or separated by commas):\nStrahd, Waterdeep, Beholder\nEldritch Blast")
         wl.addWidget(self.auto_edit, 3, 0, 1, 3)
-        wl.addWidget(hint("Fixes spellings and split words by itself. Ordinary words and short words are left alone, so long "
-                          "lists are fine."), 4, 0, 1, 3)
+        wl.addWidget(hint("Type each name or term once, spelled the right way, and nothing else. When the app hears something that "
+                          "looks or sounds close, it writes yours: “bee holder” or “beholdr” → Beholder, “strad” → Strahd. "
+                          "Ordinary and short words are left alone, so long lists are fine."), 4, 0, 1, 3)
         self.lbl_expect_h = QtWidgets.QLabel(); self.lbl_expect = QtWidgets.QLabel()
         wl.addWidget(self.lbl_expect_h, 5, 0); wl.addWidget(self.lbl_expect, 5, 1, 1, 2)
         self.voc = QtWidgets.QLineEdit()
