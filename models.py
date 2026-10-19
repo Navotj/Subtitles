@@ -12,14 +12,14 @@ SHERPA = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recong
 
 # Speech to text (Whisper, run by faster-whisper). langs: "en" = English only, "all" = every language Whisper knows.
 SPEECH = [
-    dict(id="small.en", label="Small, English only", langs="en", gpu=False, mb=500,
+    dict(id="small.en", label="Small, English only", langs="en", gpu=False, mb=486,
          desc="English only. Runs on any computer, no graphics card needed. About 0.5 GB. Fastest, least accurate."),
-    dict(id="small", label="Small, all languages", langs="all", gpu=False, mb=500,
+    dict(id="small", label="Small, all languages", langs="all", gpu=False, mb=486,
          desc="All languages. Runs on any computer, no graphics card needed. About 0.5 GB. Basic accuracy."),
-    dict(id="large-v3-turbo", label="Large v3 turbo", langs="all", gpu=True, mb=1600,
+    dict(id="large-v3-turbo", label="Large v3 turbo", langs="all", gpu=True, mb=1622,
          desc="All languages. Needs an NVIDIA graphics card (about 3 GB of its memory). About 1.6 GB. "
               "High GPU use. Very accurate and fast: the normal choice with an NVIDIA card."),
-    dict(id="large-v3", label="Large v3", langs="all", gpu=True, mb=3100,
+    dict(id="large-v3", label="Large v3", langs="all", gpu=True, mb=3091,
          desc="All languages. Needs an NVIDIA graphics card (about 5 GB of its memory). About 3.1 GB. "
               "Highest GPU use, about twice as slow as turbo. Most accurate."),
 ]
@@ -28,7 +28,7 @@ SPEECH = [
 SPEAKER = [
     dict(id="nemo_en_titanet_small.onnx", label="TitaNet small", mb=40,
          desc="Any computer, very light. About 40 MB. Good for most calls."),
-    dict(id="nemo_en_titanet_large.onnx", label="TitaNet large", mb=100,
+    dict(id="nemo_en_titanet_large.onnx", label="TitaNet large", mb=101,
          desc="Any computer, a little more processor use. About 100 MB. Tells similar voices apart better."),
 ]
 
