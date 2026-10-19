@@ -727,7 +727,11 @@ class Panel(QtWidgets.QWidget):
         self.btn_update = QtWidgets.QPushButton("Check for updates")
         self.btn_update.setToolTip("Looks on GitHub for a newer version and asks before downloading it. "
                                    "Your settings, voices, transcripts and models are never touched.")
-        self.btn_update.clicked.connect(self.check_updates); br.addWidget(self.btn_update)
+        self.btn_update.clicked.connect(self.check_updates)
+        self.ver_label = QtWidgets.QLabel(); self.ver_label.setStyleSheet("color:#888; font-size:11px")
+        self.ver_label.setAlignment(Qt.AlignHCenter); self.refresh_version()
+        vb = QtWidgets.QVBoxLayout(); vb.setSpacing(1); vb.addWidget(self.btn_update); vb.addWidget(self.ver_label)
+        br.addLayout(vb)
         self.update_found.connect(self._update_checked); self.update_done.connect(self._update_installed)
         br.addStretch(1)
         self.info = QtWidgets.QLabel(""); self.info.setStyleSheet("color:#888"); br.addWidget(self.info)
@@ -904,6 +908,12 @@ class Panel(QtWidgets.QWidget):
         self.mic_status.setText("")
 
     # ---- updates
+    def refresh_version(self):
+        v = updater.local_version()
+        self.ver_label.setText("ver: " + (v[:7] if v else "unknown"))
+        self.ver_label.setToolTip("The version (GitHub commit) of the program files in this folder." if v else
+                                  "This folder has no version record yet; it is written after the first update.")
+
     def check_updates(self):
         self.btn_update.setEnabled(False); self.btn_update.setText("Checking...")
         def work():
@@ -932,7 +942,7 @@ class Panel(QtWidgets.QWidget):
 
     def _update_installed(self, res):
         self.btn_update.setEnabled(True); self.btn_update.setText("Check for updates")
-        ok, text, changed = res; box = QtWidgets.QMessageBox
+        ok, text, changed = res; box = QtWidgets.QMessageBox; self.refresh_version()
         if not ok: box.warning(self, "Update", text); return
         msg = f"Updated {len(changed)} file{'s' if len(changed) != 1 else ''}. Close and reopen the app to use the new version."
         if any(f.replace("\\", "/") in ("install.ps1", "install.bat") for f in changed):
