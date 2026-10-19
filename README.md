@@ -30,6 +30,7 @@ Start it from the desktop icon (no console window; messages go to `app.log`). Cl
 - **Groups:** each D&D group has its own voices (`groups\<group>.json`). Switch, add or rename groups at the top of the window. Your own voice is shared by all groups.
 - **Your own voice:** your mic is added to the transcript only, never to the subtitles. It is labelled with your Windows user name; change it under **My name**. Echo of the call that your mic picks up is recognised and ignored. Use **Relearn my voice** if your lines look wrong. Untick **My mic** (top row) when nobody on your side needs recording, such as a film or a stream: the mic picker, your name and your row in the voice list disappear and the mic is not opened.
 - **Play a test run:** plays a made-up conversation on the subtitles (one-liners, quick back-and-forth, long speeches) with three test speakers, so you can set size, width, position and darkness. It only touches the overlay: no transcript, no saved voices. Press it again to stop.
+- **Check for updates:** asks GitHub whether there is a newer version and, if so, asks before downloading it. Only program files are replaced; settings, voices, transcripts and models stay. A git clone is updated with `git pull`, anything else by downloading the files. If the setup changed it tells you to run `install.bat` again.
 - **Transcripts:** saved in `transcripts\<group>\<date>_<time>.txt` (for example `2026-10-19_01-45.txt`). If you reopen the app within 5 minutes it carries on in the same file. Between 5 minutes and an hour it asks "Is this a continuation of the previous session from …?". After an hour it starts a new file. Fixes and renames are written into the file too. Select lines with Ctrl or Shift-click and copy them with right-click or Ctrl+C. "Natural 20" is highlighted.
 - **Keep transcript:** untick it and nothing is written to a file; the transcript window only shows the last minute.
 - **Word fixing** (three lists, saved per group, from lowest to highest impact):
@@ -51,6 +52,7 @@ Start it from the desktop icon (no console window; messages go to `app.log`). Cl
 | `wordswap.py` | the automatic word swap (`python tools\test_wordswap.py` checks it) |
 | `engine.py` | audio capture, speech detection, Whisper, voice matching, echo filter |
 | `install.bat` / `install.ps1` | setup |
+| `updater.py` | the Check for updates button |
 | `Subtitles.bat` | start without the desktop icon |
 | `make_shortcut.ps1` | (re)create the desktop icon |
 | `selftest.py` | runs a recorded call through the engine and scores who-said-what: `selftest.bat test\conversation.flac --truth test\conversation.json` |

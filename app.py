@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 import engine
 import wordswap
+import updater
 from engine import log
 
 # started without a CLI window (pythonw): status messages and errors go to app.log instead
@@ -538,6 +539,9 @@ class RescanCombo(QtWidgets.QComboBox):
 
 
 class Panel(QtWidgets.QWidget):
+    update_found = QtCore.Signal(object)         # result of a background check: a dict, or the exception
+    update_done = QtCore.Signal(object)         # result of a background install: (ok, text, changed files)
+
     def __init__(self, cfg, bank, overlay, bridge):
         super().__init__()
         self.cfg, self.bank, self.overlay, self.bridge = cfg, bank, overlay, bridge
@@ -720,6 +724,11 @@ class Panel(QtWidgets.QWidget):
         self.cb_keep.setChecked(cfg.get("keep_transcript", True)); self.cb_keep.toggled.connect(self.toggle_keep)
         br.addWidget(self.cb_keep)
         b = QtWidgets.QPushButton("Open transcripts folder"); b.clicked.connect(self.open_transcripts); br.addWidget(b)
+        self.btn_update = QtWidgets.QPushButton("Check for updates")
+        self.btn_update.setToolTip("Looks on GitHub for a newer version and asks before downloading it. "
+                                   "Your settings, voices, transcripts and models are never touched.")
+        self.btn_update.clicked.connect(self.check_updates); br.addWidget(self.btn_update)
+        self.update_found.connect(self._update_checked); self.update_done.connect(self._update_installed)
         br.addStretch(1)
         self.info = QtWidgets.QLabel(""); self.info.setStyleSheet("color:#888"); br.addWidget(self.info)
         lay.addLayout(br)
@@ -893,6 +902,42 @@ class Panel(QtWidgets.QWidget):
     def stop_mic(self):
         if getattr(self, "mic_worker", None): self.mic_worker.set_source(None)
         self.mic_status.setText("")
+
+    # ---- updates
+    def check_updates(self):
+        self.btn_update.setEnabled(False); self.btn_update.setText("Checking...")
+        def work():
+            try: r = updater.check()
+            except Exception as e: r = e
+            self.update_found.emit(r)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _update_checked(self, r):
+        self.btn_update.setEnabled(True); self.btn_update.setText("Check for updates")
+        box = QtWidgets.QMessageBox
+        if isinstance(r, Exception):
+            box.warning(self, "Check for updates", f"Could not reach GitHub:\n{r}"); return
+        new = r["latest"]
+        what = f"Newest version: {new['date']} - {new['message']}"
+        if r["state"] == "current":
+            box.information(self, "Check for updates", "You have the newest version.\n\n" + what); return
+        head = ("An update is available" + (f" ({r['behind']} change{'s' if r['behind'] != 1 else ''})" if r["behind"] else "") + "."
+                if r["state"] == "update" else "Could not tell which version you have, but the newest is available.")
+        if box.question(self, "Check for updates", f"{head}\n\n{what}\n\nDownload and install it now? Your settings, voices, "
+                        "transcripts and models are kept.") != box.Yes: return
+        self.btn_update.setEnabled(False); self.btn_update.setText("Updating...")
+        def work():
+            self.update_done.emit(updater.install(new["sha"]))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _update_installed(self, res):
+        self.btn_update.setEnabled(True); self.btn_update.setText("Check for updates")
+        ok, text, changed = res; box = QtWidgets.QMessageBox
+        if not ok: box.warning(self, "Update", text); return
+        msg = f"Updated {len(changed)} file{'s' if len(changed) != 1 else ''}. Close and reopen the app to use the new version."
+        if any(f.replace("\\", "/") in ("install.ps1", "install.bat") for f in changed):
+            msg += "\n\nThe setup changed too: run install.bat once more to get any new packages or models."
+        box.information(self, "Update", msg)
 
     def toggle_test_run(self, on):
         self.btn_test.setText("Stop test run" if on else "Play a test run")

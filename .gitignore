@@ -16,3 +16,4 @@ __pycache__/
 
 # Whisper checks on public videos (tools\eval_video.bat): downloads, saved Whisper output, reports
 eval/
+version.txt
