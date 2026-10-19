@@ -1,0 +1,132 @@
+# Draft D&D terms for scoring (tools\eval_video.bat "<url>" --terms tools\dnd_terms_draft.txt). One per line; # starts a comment.
+# rules and letter-words
+d20
+d12
+d10
+d8
+d6
+d4
+NPC
+cantrip
+saving throw
+death save
+death saving throw
+bonus action
+spell slot
+long rest
+short rest
+advantage
+disadvantage
+initiative
+concentration
+proficiency
+inspiration
+armor class
+hit points
+critical hit
+opportunity attack
+dexterity
+constitution
+wisdom
+charisma
+intelligence
+Dungeon Master
+# classes
+artificer
+barbarian
+bard
+cleric
+druid
+fighter
+monk
+paladin
+ranger
+rogue
+sorcerer
+warlock
+wizard
+# races
+tiefling
+dragonborn
+half-elf
+half-orc
+halfling
+gnome
+goliath
+aasimar
+genasi
+tabaxi
+kenku
+firbolg
+githyanki
+aarakocra
+# monsters
+beholder
+mind flayer
+kobold
+gnoll
+owlbear
+mimic
+gelatinous cube
+displacer beast
+tarrasque
+lich
+vampire
+wraith
+goblin
+hobgoblin
+bugbear
+ogre
+troll
+wyvern
+basilisk
+medusa
+minotaur
+drow
+illithid
+tiamat
+bahamut
+# spells
+fireball
+magic missile
+eldritch blast
+healing word
+cure wounds
+misty step
+counterspell
+shield
+thunderwave
+hunter's mark
+hex
+sleep
+polymorph
+wish
+teleport
+revivify
+detect magic
+mage hand
+prestidigitation
+vicious mockery
+sneak attack
+divine smite
+wild shape
+# places and gods (Forgotten Realms)
+Neverwinter
+Waterdeep
+Baldur's Gate
+Icewind Dale
+Faerun
+Underdark
+Menzoberranzan
+Strahd
+Barovia
+Ravenloft
+Mystra
+Tymora
+Bane
+Lolth
+Moradin
+Pelor
+Asmodeus
+Elminster
+Drizzt

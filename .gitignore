@@ -13,3 +13,6 @@ app.log
 snapshot_*.png
 __pycache__/
 *.tmp
+
+# Whisper checks on public videos (tools\eval_video.bat): downloads, saved Whisper output, reports
+eval/
