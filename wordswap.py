@@ -6,8 +6,9 @@ alone and the match has to be close. Anything stranger belongs in the manual wor
 Big lists are fine: terms are indexed by first sound and length, so only a handful are compared per heard phrase."""
 import re
 import difflib
+import unicodedata
 
-_TOKEN = re.compile(r"[A-Za-z0-9]+(?:['’][A-Za-z]+)?")
+_TOKEN = re.compile(r"[^\W_]+(?:['’][^\W\d_]+)?")           # letters with accents (ü, é, ñ) count as letters
 _JOIN = re.compile(r"[\s\-]+")
 
 # ordinary words we never swap, even when a term in the list looks a bit like them
@@ -32,7 +33,9 @@ def parse_terms(raw):
 
 
 def _norm(s):
-    return re.sub(r"[^a-z]", "", s.lower())
+    """letters only, accents dropped (Zürich -> zurich), so a heard "zurich" still finds the term"""
+    s = unicodedata.normalize("NFKD", s.lower().replace("ß", "ss"))
+    return re.sub(r"[^a-z]", "", "".join(c for c in s if not unicodedata.combining(c)))
 
 
 def _key(w):

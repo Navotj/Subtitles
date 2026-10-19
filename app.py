@@ -10,6 +10,7 @@ import numpy as np
 import engine
 import wordswap
 import updater
+import models
 from engine import log
 
 # started without a CLI window (pythonw): status messages and errors go to app.log instead
@@ -538,6 +539,131 @@ class RescanCombo(QtWidgets.QComboBox):
         super().showPopup()
 
 
+class ModelsDialog(QtWidgets.QDialog):
+    """Pick the speech model, the spoken languages and the voice model. Changed models are downloaded; the old ones are
+    removed at the next start. Changing only the languages takes effect straight away."""
+    progress = QtCore.Signal(float)
+    says = QtCore.Signal(str)
+    done = QtCore.Signal(object)
+
+    def __init__(self, panel):
+        super().__init__(panel)
+        self.panel, self.cfg = panel, panel.cfg
+        self.setWindowTitle("Change models"); self.resize(700, 700)
+        self.gpu = models.detect_gpu()
+        lay = QtWidgets.QVBoxLayout(self)
+        langs = list(self.cfg.get("languages") or ["en"])
+        self.rec = models.recommended_speech(self.gpu, langs)
+        pc = f"{self.gpu[0]} ({round(self.gpu[1] / 1024)} GB)" if self.gpu else "no NVIDIA graphics card found"
+        top = QtWidgets.QLabel(f"This computer: <b>{pc}</b>"); lay.addWidget(top)
+
+        def section(title, note=None):
+            g = QtWidgets.QGroupBox(title); v = QtWidgets.QVBoxLayout(g)
+            if note:
+                n = QtWidgets.QLabel(note); n.setWordWrap(True); n.setStyleSheet("color:#888"); n.setMinimumWidth(1)
+                n.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred); v.addWidget(n)
+            lay.addWidget(g); return v
+
+        v = section("Speech to text", "Turns what people say into text. Bigger models are more accurate and use more of your computer.")
+        self.speech = {}; self.speech_group = QtWidgets.QButtonGroup(self)
+        for m in models.SPEECH:
+            self.speech[m["id"]] = self._option(v, self.speech_group, m, models.speech_installed(m["id"]),
+                                                  m["id"] == self.rec)
+        v = section("Languages", "Tick every language that will be spoken. With one ticked it is used as it is (fastest, most "
+                                 "accurate); with several, the app picks the right one for each sentence.")
+        grid = QtWidgets.QGridLayout(); v.addLayout(grid); self.lang = {}
+        for i, (code, name) in enumerate(models.LANGUAGES):
+            cb = QtWidgets.QCheckBox(name); cb.setChecked(code in langs); cb.toggled.connect(self._langs_changed)
+            self.lang[code] = cb; grid.addWidget(cb, i // 4, i % 4)
+        v = section("Voice recognition", "Tells people apart by their voice. It runs on the processor.")
+        self.spk = {}; self.spk_group = QtWidgets.QButtonGroup(self)
+        for m in models.SPEAKER:
+            self.spk[m["id"]] = self._option(v, self.spk_group, m, models.speaker_installed(m["id"]),
+                                               m["id"] == "nemo_en_titanet_small.onnx")
+        self.warn = QtWidgets.QLabel(); self.warn.setWordWrap(True); self.warn.setStyleSheet("color:#e5a03b"); self.warn.setMinimumWidth(1); lay.addWidget(self.warn)
+        self.status = QtWidgets.QLabel(""); lay.addWidget(self.status)
+        self.bar = QtWidgets.QProgressBar(); self.bar.setRange(0, 100); self.bar.hide(); lay.addWidget(self.bar)
+        row = QtWidgets.QHBoxLayout()
+        self.b_rec = QtWidgets.QPushButton("Use the recommended choices"); self.b_rec.clicked.connect(self.recommended)
+        self.b_ok = QtWidgets.QPushButton("Apply"); self.b_ok.setDefault(True); self.b_ok.clicked.connect(self.apply)
+        self.b_cancel = QtWidgets.QPushButton("Close"); self.b_cancel.clicked.connect(self.reject)
+        row.addWidget(self.b_rec); row.addStretch(1); row.addWidget(self.b_ok); row.addWidget(self.b_cancel); lay.addLayout(row)
+        self.speech[self.cfg.get("whisper_model", self.rec)][0].setChecked(True) if self.cfg.get("whisper_model") in self.speech else self.speech[self.rec][0].setChecked(True)
+        (self.spk.get(self.cfg.get("voice_model")) or next(iter(self.spk.values())))[0].setChecked(True)
+        self.progress.connect(lambda f: self.bar.setValue(int(f * 100)))
+        self.says.connect(self.status.setText); self.done.connect(self._finished)
+        self._langs_changed(); self.speech_group.buttonToggled.connect(lambda *_: self._refresh()); self.spk_group.buttonToggled.connect(lambda *_: self._refresh())
+
+    def _option(self, v, group, m, have, rec):
+        rb = QtWidgets.QRadioButton(m["label"] + ("   (recommended for this computer)" if rec and "gpu" in m else
+                                                  "   (recommended)" if rec else ""))
+        f = rb.font(); f.setBold(True); rb.setFont(f); group.addButton(rb); v.addWidget(rb)
+        d = QtWidgets.QLabel(m["desc"] + ("  Downloaded." if have else "  Not downloaded yet."))
+        d.setWordWrap(True); d.setStyleSheet("color:#888"); d.setContentsMargins(22, 2, 0, 6)
+        d.setMinimumWidth(1); d.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred); v.addWidget(d)
+        rb.setProperty("mid", m["id"])
+        return rb, d
+
+    def chosen_langs(self): return [c for c, _ in models.LANGUAGES if self.lang[c].isChecked()]
+
+    def _langs_changed(self, *_):
+        langs = self.chosen_langs()
+        if not langs:                                  # at least one
+            self.lang["en"].blockSignals(True); self.lang["en"].setChecked(True); self.lang["en"].blockSignals(False); langs = ["en"]
+        for m in models.SPEECH:
+            rb, d = self.speech[m["id"]]; ok = models.supports(m, langs)
+            rb.setEnabled(ok); d.setEnabled(ok)
+        cur = self.speech_group.checkedButton()
+        if cur is None or not cur.isEnabled():
+            self.speech[models.recommended_speech(self.gpu, langs)][0].setChecked(True)
+        self._refresh()
+
+    def picked(self):
+        return dict(whisper_model=self.speech_group.checkedButton().property("mid"),
+                    voice_model=self.spk_group.checkedButton().property("mid"), languages=self.chosen_langs())
+
+    def _refresh(self):
+        if not self.speech_group.checkedButton() or not self.spk_group.checkedButton(): return
+        new = self.picked(); w = []
+        if new["whisper_model"] != self.cfg.get("whisper_model"): w.append("The app restarts to use the new speech model; the old one is deleted then.")
+        if new["voice_model"] != self.cfg.get("voice_model"):
+            w.append("Saved voices were made with the current voice model, so they are set aside and people are learned again.")
+        self.warn.setText("  ".join(w))
+
+    def recommended(self):
+        langs = self.chosen_langs()
+        self.speech[models.recommended_speech(self.gpu, langs)][0].setChecked(True)
+        self.spk["nemo_en_titanet_small.onnx"][0].setChecked(True)
+
+    def apply(self):
+        new = self.picked(); old = dict(whisper_model=self.cfg.get("whisper_model"), voice_model=self.cfg.get("voice_model"))
+        self.cfg["languages"] = new["languages"]; engine.save_config(self.cfg)          # languages apply at once
+        if new["whisper_model"] == old["whisper_model"] and new["voice_model"] == old["voice_model"]:
+            self.accept(); return
+        for w in (self.b_ok, self.b_rec, self.b_cancel): w.setEnabled(False)
+        self.bar.setValue(0); self.bar.show()
+        def work():
+            try:
+                stale = models.download_changes(old, new, self.progress.emit, self.says.emit)
+                self.done.emit((new, stale, None))
+            except Exception as e:
+                traceback.print_exc(); self.done.emit((new, [], str(e)))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _finished(self, res):
+        new, stale, err = res; self.bar.hide()
+        for w in (self.b_ok, self.b_rec, self.b_cancel): w.setEnabled(True)
+        if err:
+            self.status.setText(f"Download failed: {err}. Nothing was changed."); return
+        self.cfg.update(whisper_model=new["whisper_model"], voice_model=new["voice_model"])
+        self.cfg["models_to_delete"] = list(self.cfg.get("models_to_delete") or []) + [list(x) for x in stale]
+        engine.save_config(self.cfg)
+        box = QtWidgets.QMessageBox
+        if box.question(self, "Models changed", "The new models are downloaded. Restart the app now to use them?") == box.Yes:
+            self.panel.restart()
+        self.accept()
+
+
 class Panel(QtWidgets.QWidget):
     update_found = QtCore.Signal(object)         # result of a background check: a dict, or the exception
     update_done = QtCore.Signal(object)         # result of a background install: (ok, text, changed files)
@@ -582,6 +708,9 @@ class Panel(QtWidgets.QWidget):
         b = QtWidgets.QPushButton("New group…"); b.clicked.connect(self.new_group); grow.addWidget(b)
         b = QtWidgets.QPushButton("Rename group…"); b.clicked.connect(self.rename_group); grow.addWidget(b)
         grow.addStretch(1)
+        b = QtWidgets.QPushButton("Change models…")
+        b.setToolTip("Choose the speech model, the languages and the voice model (with what each one needs)")
+        b.clicked.connect(lambda: ModelsDialog(self).exec()); grow.addWidget(b)
         lay.addLayout(grow)
         self.fill_groups()
         self.group.currentIndexChanged.connect(lambda _: self.switch_group(self.group.currentText()))
@@ -904,6 +1033,12 @@ class Panel(QtWidgets.QWidget):
     def stop_mic(self):
         if getattr(self, "mic_worker", None): self.mic_worker.set_source(None)
         self.mic_status.setText("")
+
+    def restart(self):
+        try: self.save_session()
+        except Exception: traceback.print_exc()
+        subprocess.Popen([sys.executable] + sys.argv, cwd=HERE)
+        QtWidgets.QApplication.quit()
 
     # ---- updates
     def refresh_version(self):
@@ -1470,6 +1605,8 @@ def main():
 
     def load():
         try:
+            gone = models.cleanup(cfg)
+            if gone: engine.save_config(cfg); engine.log(f"[models] removed the old models: {', '.join(gone)}")
             asr = engine.Transcriber(cfg)
             emb = engine.Embedder(cfg["voice_model"])
             panel.pipeline = engine.Pipeline(cfg, bank, asr, emb, on_event)

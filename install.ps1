@@ -20,23 +20,28 @@ try {
     if (-not (Test-Path $uv)) { throw "uv was not found at $uv after install" }
     $py = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
     Step 'Create Python 3.11 environment' { & $uv venv --python 3.11 --allow-existing .venv }
-    Step 'Install packages (Whisper, voice models, overlay, CUDA libraries ~1.5 GB)' {
-        & $uv pip install --python $py faster-whisper sherpa-onnx PyAudioWPatch PySide6-Essentials soxr numpy soundfile `
-            nvidia-cublas-cu12 "nvidia-cudnn-cu12==9.*" nvidia-cuda-runtime-cu12 nvidia-cuda-nvrtc-cu12
+    $nvidia = $null -ne (Get-Command nvidia-smi -ErrorAction SilentlyContinue)
+    if ($nvidia) { Write-Host "NVIDIA graphics card found: Whisper will run on it (CUDA libraries ~1.5 GB)." -ForegroundColor Green }
+    else { Write-Host "No NVIDIA graphics card found: Whisper will run on the processor with a smaller model." -ForegroundColor Yellow }
+    Step 'Install packages (Whisper, voice models, overlay)' {
+        & $uv pip install --python $py faster-whisper sherpa-onnx PyAudioWPatch PySide6-Essentials soxr numpy soundfile
+        if ($nvidia -and $LASTEXITCODE -eq 0) {
+            & $uv pip install --python $py nvidia-cublas-cu12 "nvidia-cudnn-cu12==9.*" nvidia-cuda-runtime-cu12 nvidia-cuda-nvrtc-cu12
+        }
     }
     New-Item -ItemType Directory -Force models | Out-Null
     $rel = 'https://github.com/k2-fsa/sherpa-onnx/releases/download'
-    foreach ($m in @(@('asr-models', 'silero_vad.onnx'), @('speaker-recongition-models', 'nemo_en_titanet_small.onnx'))) {
+    foreach ($m in @(,@('asr-models', 'silero_vad.onnx'))) {
         $dst = Join-Path 'models' $m[1]
         if (-not (Test-Path $dst)) {
             Step "Download $($m[1])" { Invoke-WebRequest "$rel/$($m[0])/$($m[1])" -OutFile $dst -UseBasicParsing; $global:LASTEXITCODE = 0 }
         }
     }
     $env:HF_HUB_DISABLE_SYMLINKS_WARNING = '1'
-    Step 'Download Whisper large-v3-turbo (~1.6 GB)' {
-        & $py -c "from faster_whisper import download_model; print(download_model('large-v3-turbo', cache_dir='models'))"
+    Step 'Download the recommended models for this computer (change them later with "Change models" in the app)' {
+        & $py models.py install
     }
-    Step 'Test on the GPU with a recorded sample call' {
+    Step 'Test with a recorded sample call' {
         & $py -u selftest.py test\conversation.flac --truth test\conversation.json
     }
     Step 'Desktop icon' { powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'make_shortcut.ps1') }

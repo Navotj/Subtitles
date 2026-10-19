@@ -25,8 +25,9 @@ FRAME = 512                     # 32 ms, what Silero VAD wants
 # ----------------------------------------------------------------------------------------------- config
 DEFAULT_CONFIG = {
     "audio_device": "auto",            # "auto" = NVIDIA Broadcast speakers if present, else Windows default output
-    "whisper_model": "large-v3-turbo",
-    "language": "en",
+    "models_to_delete": [],            # old models, removed at the next start (see models.py)
+    "languages": ["en"],               # spoken languages (tick several: the app picks per sentence); "en" only = English models allowed
+    "whisper_model": "large-v3-turbo", # see models.py for the list
     "vocabulary": "",                  # "words to expect" (high impact): names Whisper listens for; only the first expect_cap are used
     "expect_cap": 40,                  # how many of them fit (Whisper only takes roughly 220 tokens of hints)
     "auto_words": "",                  # "automatic word swap" (medium impact): known terms that similar-sounding words are changed into
@@ -80,6 +81,9 @@ def load_config():
             with open(p, encoding="utf-8") as f: cfg.update(json.load(f))
         except Exception as e:
             print(f"[config] could not read config.json ({e}); using defaults", flush=True)
+    if "language" in cfg:                                   # older settings: one language
+        old = cfg.pop("language")
+        if "languages" not in cfg or cfg["languages"] == ["en"]: cfg["languages"] = [old] if old else ["en"]
     if not cfg.get("my_name"): cfg["my_name"] = default_my_name()
     return cfg
 
@@ -364,26 +368,49 @@ class Transcriber:
     def __init__(self, cfg):
         add_cuda_dll_dirs()
         from faster_whisper import WhisperModel
-        self.cfg = cfg; self.device = "cuda"
+        import models
+        self.cfg = cfg; self.device = "cuda"; self.last_lang = None
+        langs = cfg.get("languages") or ["en"]
         name = cfg.get("whisper_model", "large-v3-turbo")
+        spec = models.by_id(models.SPEECH, name)
+        if spec and not models.supports(spec, langs):          # e.g. an English-only model with German ticked
+            name = models.recommended_speech(models.detect_gpu(), langs)
+            log(f"[whisper] {cfg.get('whisper_model')} cannot do {langs}; using {name}")
         try:
+            if not models.speech_installed(name): models.download_speech(name)
             self.model = WhisperModel(name, device="cuda", compute_type="float16", download_root=MODELS)
-            list(self.model.transcribe(np.zeros(SR, dtype=np.float32), language=cfg.get("language") or None,
+            list(self.model.transcribe(np.zeros(SR, dtype=np.float32), language=langs[0] if len(langs) == 1 else None,
                                        beam_size=1)[0])                       # warm-up; fails here if CUDA is broken
         except Exception as e:
-            log(f"[whisper] GPU failed ({e}); falling back to CPU with the 'small.en' model (slower, less accurate)")
+            name = "small.en" if langs == ["en"] else "small"
+            log(f"[whisper] GPU failed ({e}); using the '{name}' model on the processor (slower, less accurate)")
             self.device = "cpu"
-            self.model = WhisperModel("small.en", device="cpu", compute_type="int8", download_root=MODELS)
-        self.name = name if self.device == "cuda" else "small.en"
+            if not models.speech_installed(name): models.download_speech(name)
+            self.model = WhisperModel(name, device="cpu", compute_type="int8", download_root=MODELS)
+        self.name = name
         log(f"[whisper] {self.name} ready on {self.device.upper()}")
 
     def vocab_terms(self):
         """the "words to expect" list (only this list goes to Whisper), cut to the first expect_cap"""
         return wordswap.parse_terms(self.cfg.get("vocabulary") or "")[:int(self.cfg.get("expect_cap", 40))]
 
-    def _opts(self, vocab=False):
+    def pick_language(self, audio, final=False):
+        """one ticked language: that one. Several: Whisper's guess among the ticked ones, for the finished sentence;
+        short or in-progress clips keep the language of the last sentence."""
+        langs = self.cfg.get("languages") or ["en"]
+        if len(langs) == 1: return langs[0]
+        if not final or len(audio) < SR:
+            return self.last_lang if self.last_lang in langs else langs[0]
+        try:
+            probs = dict(self.model.detect_language(audio)[2])
+            self.last_lang = max(langs, key=lambda l: probs.get(l, 0.0))
+        except Exception:
+            pass
+        return self.last_lang if self.last_lang in langs else langs[0]
+
+    def _opts(self, vocab=False, lang=None):
         terms = self.vocab_terms() if vocab else []
-        return dict(language=self.cfg.get("language") or None, condition_on_previous_text=False, vad_filter=False,
+        return dict(language=lang or self.pick_language(None), condition_on_previous_text=False, vad_filter=False,
                     no_speech_threshold=0.6, log_prob_threshold=-1.0, compression_ratio_threshold=2.4,
                     hotwords=", ".join(terms) or None)
 
@@ -423,15 +450,15 @@ class Transcriber:
 
     _lock = threading.Lock()
 
-    def _run(self, audio, vocab, **kw):
+    def _run(self, audio, vocab, lang=None, **kw):
         with self._lock:                      # the call and your mic share one Whisper
-            segs, _ = self.model.transcribe(audio, **kw, **self._opts(vocab))
+            segs, _ = self.model.transcribe(audio, **kw, **self._opts(vocab, lang))
             segs = list(segs)
         return self._clean(segs, len(audio) / SR)
 
     def partial(self, audio):
         # never with the word list: short in-progress clips are where Whisper copies it into the text
-        segs = self._run(audio, False, beam_size=1, temperature=0.0, without_timestamps=True)
+        segs = self._run(audio, False, self.pick_language(audio), beam_size=1, temperature=0.0, without_timestamps=True)
         text = " ".join(s.text.strip() for s in segs).strip()
         return "" if self.repetitive(text) else text
 
@@ -439,10 +466,11 @@ class Transcriber:
         """-> list of (start_s, end_s, word_text)"""
         kw = dict(beam_size=5, temperature=[0.0, 0.2, 0.4], word_timestamps=True)
         use_vocab = bool(self.vocab_terms()) and len(audio) / SR >= 1.5
-        segs = self._run(audio, use_vocab, **kw)
+        with self._lock: lang = self.pick_language(audio, final=True)
+        segs = self._run(audio, use_vocab, lang, **kw)
         if use_vocab and self.leaked(" ".join(s.text for s in segs)):
             self.leaks = getattr(self, "leaks", 0) + 1
-            segs = self._run(audio, False, **kw)              # redo without the list
+            segs = self._run(audio, False, lang, **kw)              # redo without the list
         if self.repetitive(" ".join(s.text for s in segs)): return []
         words = []
         for s in segs:
