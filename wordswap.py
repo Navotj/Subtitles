@@ -47,6 +47,11 @@ def _key(w):
     return s.translate(str.maketrans("dbg", "tpk"))
 
 
+def _bucket(k):
+    """first consonant sound of a key, so a missing or different first vowel (elwyn / Aelwyn) still finds its term"""
+    return k[1:2] if k[:1] in "aeiou" and len(k) > 1 else k[:1]
+
+
 class AutoSwap:
     MIN_LEN = 5                     # letters; shorter words are too easy to confuse
 
@@ -57,7 +62,7 @@ class AutoSwap:
             n = _norm(t)
             if len(n) < self.MIN_LEN: continue
             k = _key(n)
-            self.by.setdefault((k[:1], len(n)), []).append((n, k, t))
+            self.by.setdefault((_bucket(k), len(n)), []).append((n, k, t))
             self.max_words = max(self.max_words, len(_TOKEN.findall(t)))
         self.size = sum(len(v) for v in self.by.values())
 
@@ -65,7 +70,7 @@ class AutoSwap:
         """best known term for the letters w, as (score, term) or None; (1.0, term) when it is already exact"""
         L = len(w); k = _key(w); best = None
         for l2 in range(L - 2, L + 3):
-            for tn, tk, term in self.by.get((k[:1], l2), ()):
+            for tn, tk, term in self.by.get((_bucket(k), l2), ()):
                 if tn == w:
                     return 1.0, term
                 sm = difflib.SequenceMatcher(None, w, tn)

@@ -66,18 +66,45 @@ _ONES = {w: str(n) for n, w in enumerate("zero one two three four five six seven
                                          "fourteen fifteen sixteen seventeen eighteen nineteen twenty".split())}
 _TENS = {w: str(10 * n) for n, w in enumerate("x x twenty thirty forty fifty sixty seventy eighty ninety".split()) if n > 1}
 _NUM = {**_ONES, **_TENS, "hundred": "100"}
+# spoken forms the captions and Whisper write differently; both sides are brought to one spelling so they are not "mistakes"
+_SAY = {"gonna": "going to", "wanna": "want to", "gotta": "got to", "kinda": "kind of", "sorta": "sort of", "cause": "because",
+        "cannot": "can not", "ok": "okay", "yeah": "yes", "yep": "yes", "yup": "yes", "nope": "no", "dunno": "do not know",
+        "gimme": "give me", "lemme": "let me", "outta": "out of", "lotta": "lot of", "coulda": "could have", "woulda": "would have",
+        "shoulda": "should have", "alright": "all right", "'cause": "because", "y'all": "you all"}
+_IS = {"it", "that", "he", "she", "there", "what", "here", "who", "how", "where", "when", "why"}
+_FILLERS = {"um", "uh", "uhm", "er", "erm", "hmm", "mm", "mmm", "mhm", "ah", "oh", "huh", "hm"}
+_NT = {"can": "can not", "won": "will not", "shan": "shall not", "ain": "is not"}
+
+
+def _expand(w):
+    """one lower-case word -> list of words (contractions opened up, filler dropped)"""
+    if w in _FILLERS: return []
+    if w in _SAY: return _SAY[w].split()
+    if "'" not in w: return [w]
+    base, _, tail = w.partition("'")
+    if tail == "t" and base.endswith("n"): return (_NT.get(base) or base[:-1] + " not").split()
+    if tail == "re": return [base, "are"]
+    if tail == "ve": return [base, "have"]
+    if tail == "ll": return [base, "will"]
+    if tail == "m": return [base, "am"]
+    if tail == "d": return [base, "would"]
+    if tail == "s" and base in _IS: return [base, "is"]
+    if tail == "s" and base == "let": return ["let", "us"]
+    return [w]
 
 
 def toks(text):
-    """lower-case words for comparing; number words become digits ("twenty one" -> 21) so 20 vs twenty is not a mistake"""
+    """lower-case words for comparing. Number words become digits ("twenty one" -> 21), contractions are opened up
+    (gonna / going to, I'm / I am) and fillers (um, uh) dropped, so none of those count as mistakes"""
     t = text.lower().replace("’", "'").replace("-", " ")
     t = re.sub(r"(\d),(\d{3})", r"\1\2", t)
     out = []
-    for w in re.findall(r"[a-z0-9]+(?:'[a-z]+)?", t):
-        n = _NUM.get(w, w)
-        if out and out[-1] in _TENS.values() and n in "123456789" and len(n) == 1 and out[-1].endswith("0"):
-            out[-1] = str(int(out[-1]) + int(n)); continue
-        out.append(n)
+    for w0 in re.findall(r"[a-z0-9]+(?:'[a-z]+)?", t):
+        for w in _expand(w0):
+            n = _NUM.get(w, w)
+            if out and out[-1] in _TENS.values() and len(n) == 1 and n in "123456789":
+                out[-1] = str(int(out[-1]) + int(n)); continue
+            out.append(n)
     return out
 
 
@@ -95,20 +122,36 @@ def _find(seq, sub):
     return [i for i in range(len(seq) - n + 1) if seq[i:i + n] == sub] if n else []
 
 
+def _chunks(cues, max_cues=25, max_secs=75.0):
+    """consecutive captions grouped into stretches; each stretch is compared as a whole, so a word a little early or late
+    never lands in the wrong place"""
+    out, cur = [], []
+    for c in cues:
+        if cur and (len(cur) >= max_cues or c[1] - cur[0][0] > max_secs):
+            out.append(cur); cur = []
+        cur.append(c)
+    if cur: out.append(cur)
+    return out
+
+
 def align(cues, words, terms=(), post=None):
     """words: [(start_s, end_s, text)] from Whisper. post: optional function applied to the text Whisper gave for each
-    caption (word swaps). -> dict with the counts the report needs"""
+    stretch (word swaps). Each Whisper word is used once; speech more than 2 s outside any caption (music, crosstalk the
+    captioner skipped) is not counted. -> dict with the counts the report needs"""
     words = sorted(words)
     mids = [(s + e) / 2 for s, e, _ in words]
     conf, missed, extra = Counter(), Counter(), Counter()
     n_ref = errors = S = D = I = 0
     tt = [(t, toks(t)) for t in terms if toks(t)]
     term_n, term_ok, term_heard = Counter(), Counter(), defaultdict(Counter)
-    for cs, ce, text in cues:
-        ref = toks(text)
-        if not ref: continue
-        lo, hi = bisect.bisect_left(mids, cs - PAD), bisect.bisect_right(mids, ce + PAD)
-        said = " ".join(w[2].strip() for w in words[lo:hi])
+    groups = _chunks([c for c in cues if toks(c[2])])
+    for gi, g in enumerate(groups):
+        t0, t1 = g[0][0], g[-1][1]
+        lo = max((groups[gi - 1][-1][1] + t0) / 2 if gi else -1e9, t0 - 2.0)
+        hi = min((t1 + groups[gi + 1][0][0]) / 2 if gi + 1 < len(groups) else 1e9, t1 + 2.0)
+        ref = [w for c in g for w in toks(c[2])]
+        i0, i1_ = bisect.bisect_left(mids, lo), bisect.bisect_left(mids, hi)
+        said = " ".join(w[2].strip() for w in words[i0:i1_])
         if post: said = post(said)
         hyp = toks(said)
         ops = difflib.SequenceMatcher(None, ref, hyp, autojunk=False).get_opcodes()

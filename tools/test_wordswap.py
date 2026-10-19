@@ -3,7 +3,7 @@ import os, sys, time, random, string
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from wordswap import apply_auto, AutoSwap, parse_terms
 
-LIST = "Beholder, Eldritch Blast, Fireball, Neverwinter, Strahd, Tiamat, Mind Flayer, Magic Missile, Tarrasque, Moradin"
+LIST = "Aelwyn, Beholder, Eldritch Blast, Fireball, Neverwinter, Strahd, Tiamat, Mind Flayer, Magic Missile, Tarrasque, Moradin"
 cases = [
     ("the bee holder attacks", "the Beholder attacks"),                    # split word
     ("I cast fire ball", "I cast Fireball"),                               # joined word
@@ -18,6 +18,7 @@ cases = [
     ("there is a moron here", "there is a moron here"),                    # similar letters, different word
     ("their water is near", "their water is near"),                        # ordinary words untouched
     ("Fireball and fireball", "Fireball and Fireball"),
+    ("said elwyn quietly", "said Aelwyn quietly"),                         # a missing first vowel
 ]
 bad = 0
 for src, want in cases:

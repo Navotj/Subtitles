@@ -56,6 +56,6 @@ Start it from the desktop icon (no console window; messages go to `app.log`). Cl
 | `echotest.py` | checks your mic lines are kept and the call's echo is not: `echotest.py test\call2.flac test\mic.flac test\mic.json` |
 | `audiotest.py` | lists what the app can listen to and records a few seconds from one (`audiotest.py "rec:CABLE Output"`, `audiotest.py mic`) |
 | `test\` | synthetic test calls made with computer voices (no real people) |
-| `tools\` | scripts that made the test calls, and `speaker_latency.py`, which measures how fast a new speaker is noticed (`python tools\speaker_latency.py`) |
+| `tools\` | scripts that made the test calls, and `speaker_latency.py` (how fast a new speaker is noticed) and `whisper_eval.py` + `eval_video.bat` (check Whisper against a video's human-made captions) |
 
 Personal data (`groups\`, `my_voice.json`, `transcripts\`, `config.json`, `app.log`) is kept out of git by `.gitignore`.

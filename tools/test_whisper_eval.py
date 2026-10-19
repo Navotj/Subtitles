@@ -29,7 +29,9 @@ assert [x[2] for x in c] == ["The bee holder attacks", "Roll a d20, then add two
 assert c[0][:2] == (1.0, 4.0)
 s = we.parse_captions(SRT); assert s[1][0] == 3604.5 and s[1][2] == "Twenty-one damage!", s
 assert we.toks("Twenty-one damage, 20 dice") == ["21", "damage", "20", "dice"], we.toks("Twenty-one damage, 20 dice")
-assert we.toks("Don’t stop") == ["don't", "stop"]
+assert we.toks("Don’t stop") == ["do", "not", "stop"]
+assert we.toks("I'm going to, um, say it's fine") == we.toks("I am gonna say it is fine"), we.toks("I'm going to, um, say it's fine")
+assert we.toks("We won't, they're sure, Katja's here") == ["we", "will", "not", "they", "are", "sure", "katja's", "here"]
 
 cues = [(1, 4, "The Beholder attacks the Tiefling"), (5, 8, "Cast Fireball, then roll a d20"), (9, 12, "Make a dexterity saving throw")]
 words = [(1.0, 1.3, " The"), (1.3, 1.6, " bee"), (1.6, 2.0, " holder"), (2.0, 2.5, " attacks"), (2.6, 2.8, " the"), (2.8, 3.4, " tifling"),
