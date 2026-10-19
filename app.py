@@ -694,11 +694,9 @@ class Panel(QtWidgets.QWidget):
         self.lbl_auto = QtWidgets.QLabel(); self.lbl_auto.setStyleSheet("color:#888")
         wl.addWidget(heading("Automatic word swap (medium impact)"), 2, 0); wl.addWidget(self.lbl_auto, 2, 1, 1, 2)
         self.auto_edit = QtWidgets.QPlainTextEdit(); self.auto_edit.setFixedHeight(62)
-        self.auto_edit.setPlaceholderText("Example (one per line, or separated by commas):\nStrahd, Waterdeep, Beholder\nEldritch Blast")
+        self.auto_edit.setPlaceholderText("Only the correct words, e.g.  Strahd, Waterdeep, Beholder")
         wl.addWidget(self.auto_edit, 3, 0, 1, 3)
-        wl.addWidget(hint("Type each name or term once, spelled the right way, and nothing else. When the app hears something that "
-                          "looks or sounds close, it writes yours: “bee holder” or “beholdr” → Beholder, “strad” → Strahd. "
-                          "Ordinary and short words are left alone, so long lists are fine."), 4, 0, 1, 3)
+        wl.addWidget(hint("Just the correct word. The app finds the wrong versions itself: “bee holder” → Beholder."), 4, 0, 1, 3)
         self.lbl_expect_h = QtWidgets.QLabel(); self.lbl_expect = QtWidgets.QLabel()
         wl.addWidget(self.lbl_expect_h, 5, 0); wl.addWidget(self.lbl_expect, 5, 1, 1, 2)
         self.voc = QtWidgets.QLineEdit()
