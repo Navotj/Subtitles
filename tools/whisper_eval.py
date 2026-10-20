@@ -93,12 +93,18 @@ def _expand(w):
     return [w]
 
 
+LANGS = ["en"]                      # languages Whisper is allowed to pick from (set by --langs)
+
+
 def toks(text):
     """lower-case words for comparing. Number words become digits ("twenty one" -> 21), contractions are opened up
     (gonna / going to, I'm / I am) and fillers (um, uh) dropped, so none of those count as mistakes"""
     t = text.lower().replace("’", "'").replace("-", " ")
     t = re.sub(r"(\d),(\d{3})", r"\1\2", t)
     out = []
+    if LANGS != ["en"]:                 # other languages: all letters count (ä ö ü ß é ...), no English contraction rules
+        t = re.sub(r"(\d)\.(\d{3})", r"\1\2", t)
+        return [w.replace("ß", "ss") for w in re.findall(r"[^\W_]+", t)]
     for w0 in re.findall(r"[a-z0-9]+(?:'[a-z]+)?", t):
         for w in _expand(w0):
             n = _NUM.get(w, w)
@@ -314,6 +320,7 @@ def run(media, captions, name=None, expect="", auto="", fixes=None, terms=None, 
         import engine
         cfg = engine.load_config(); cfg["vocabulary"] = expect; cfg["word_fixes"] = []
         if model: cfg["whisper_model"] = model
+        cfg["languages"] = LANGS
         if cpu: cfg["whisper_device"] = "cpu"
         print(f"transcribing {os.path.basename(media)} ...", flush=True)
         words, info = transcribe(media, cfg, gpu, minutes)
@@ -360,8 +367,11 @@ def main(argv=None):
     ap.add_argument("--gpu", type=int, default=80); ap.add_argument("--minutes", type=float)
     ap.add_argument("--reuse", action="store_true"); ap.add_argument("--name")
     ap.add_argument("--model", help="Whisper model to use (see models.py), default: the one in config.json")
+    ap.add_argument("--langs", default="en", help="languages Whisper may pick from, e.g. de or en,de (captions must be in the same language)")
     ap.add_argument("--cpu", action="store_true", help="run on the processor, not the graphics card")
     a = ap.parse_args(argv)
+    global LANGS
+    LANGS = [l.strip() for l in a.langs.split(",") if l.strip()] or ["en"]
     fixes = json.load(open(a.fixes, encoding="utf-8")) if a.fixes else None
     terms = [t.strip() for t in re.split(r"[,;\n]+", read_list(a.terms)) if t.strip()] if a.terms else None
     run(a.media, a.captions, a.name, read_list(a.expect).strip(), read_list(a.auto).strip(), fixes, terms,
